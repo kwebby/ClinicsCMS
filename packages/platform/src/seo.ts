@@ -1,6 +1,6 @@
 /* Author: ramanpal singh | URL: https://kwebby.com */
 import type { WebsiteLocation } from '../../contracts/src/website.js';
-import { assert } from '../../contracts/src/index.js';
+import { DomainError, assert } from '../../contracts/src/index.js';
 import { escapeHtml, safeUrl } from './common.js';
 
 export type SeoPageType='home'|'branch'|'doctor'|'service'|'medical'|'article'|'faq'|'about'|'contact'|'directory'|'tool'|'software'|'page';
@@ -21,6 +21,18 @@ function validateCustomSchema(value:Record<string,unknown>):Record<string,unknow
  assert(value['@context']==='https://schema.org' || value['@context']===undefined,'SCHEMA_CONTEXT','Only schema.org context is supported');
  const visit=(data:unknown,depth:number)=>{assert(depth<=12,'SCHEMA_DEPTH','Custom schema nesting is too deep');if(Array.isArray(data)){assert(data.length<=200,'SCHEMA_SIZE','Too many schema items');data.forEach(item=>visit(item,depth+1));}else if(data&&typeof data==='object'){for(const [key,item]of Object.entries(data)){assert(!['__proto__','constructor','prototype'].includes(key),'SCHEMA_KEY','Invalid schema property');if(key==='@context')assert(item==='https://schema.org','SCHEMA_CONTEXT','Only schema.org context is supported');visit(item,depth+1);}}};visit(value,0);
  assert(typeof value['@type']==='string'||Array.isArray(value['@graph']),'SCHEMA_TYPE','Custom schema requires a type or graph');return {'@context':'https://schema.org',...value};
+}
+/** Page-level schema.org types each page type may claim; applies to presets and to editor-supplied custom schema alike. */
+const SCHEMA_TYPES_BY_PAGE:Record<SeoPageType,string[]>={home:['WebSite','WebPage','MedicalClinic','Organization'],branch:['WebPage','MedicalClinic'],doctor:['WebPage','Person','IndividualPhysician'],service:['WebPage','Service','Offer'],medical:['WebPage','MedicalWebPage','Article'],article:['WebPage','Article','BlogPosting'],faq:['WebPage','FAQPage'],about:['WebPage','AboutPage'],contact:['WebPage','ContactPage'],directory:['WebPage','CollectionPage','ItemList'],tool:['WebPage','WebApplication'],software:['WebPage','SoftwareApplication','Organization','WebSite'],page:['WebPage']};
+/** Keeps only custom top-level nodes whose types are applicable to the page; nested values (addresses, offers, people) are left to validateCustomSchema. */
+function applicableCustomSchema(value:Record<string,unknown>,type:SeoPageType,warnings:string[]):Record<string,unknown>|null {
+ const types=(declared:unknown)=>Array.isArray(declared)?declared:[declared];
+ const permitted=(declared:unknown)=>types(declared).every(item=>typeof item==='string'&&(SCHEMA_TYPES_BY_PAGE[type].includes(item)||item==='BreadcrumbList'));
+ const reject=(declared:unknown)=>{warnings.push(`Custom schema ${types(declared).map(String).join(', ')} is not applicable to this page type`);return false;};
+ if(value['@type']!==undefined&&!permitted(value['@type'])){reject(value['@type']);return null;}
+ if(!Array.isArray(value['@graph']))return value;
+ const graph=(value['@graph'] as unknown[]).filter(node=>!!node&&typeof node==='object'&&permitted((node as Record<string,unknown>)['@type'])||reject((node as Record<string,unknown>|null)?.['@type']));
+ return graph.length?{...value,'@graph':graph}:null;
 }
 export function locationSchema(location:WebsiteLocation,site:SiteIdentity):Record<string,unknown>{
  const url=canonicalFor(location.slug,site),days=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
@@ -63,8 +75,7 @@ export function buildSeo(page:SeoPage,site:SiteIdentity) {
  let selectedGraph=graph;
  if(page.schemaTypes!==undefined){
   assert(Array.isArray(page.schemaTypes)&&page.schemaTypes.length<=10,'SCHEMA_TYPES','Choose up to ten schema types');
-  const allowed:Record<SeoPageType,string[]>={home:['WebSite','WebPage','MedicalClinic','Organization'],branch:['WebPage','MedicalClinic'],doctor:['WebPage','Person','IndividualPhysician'],service:['WebPage','Service','Offer'],medical:['WebPage','MedicalWebPage','Article'],article:['WebPage','Article','BlogPosting'],faq:['WebPage','FAQPage'],about:['WebPage','AboutPage'],contact:['WebPage','ContactPage'],directory:['WebPage','CollectionPage','ItemList'],tool:['WebPage','WebApplication'],software:['WebPage','SoftwareApplication','Organization','WebSite'],page:['WebPage']};
-  const selected=[...new Set(page.schemaTypes)].filter(type=>{const permitted=allowed[page.type??'page'].includes(type)||type==='BreadcrumbList';if(!permitted)schemaWarnings.push(`${type} is not applicable to this page type`);return permitted;});
+  const selected=[...new Set(page.schemaTypes)].filter(type=>{const permitted=SCHEMA_TYPES_BY_PAGE[page.type??'page'].includes(type)||type==='BreadcrumbList';if(!permitted)schemaWarnings.push(`${type} is not applicable to this page type`);return permitted;});
   selectedGraph=[];
   const specialized=selected.filter(type=>!['WebSite','WebPage','MedicalClinic','Organization','Offer','ItemList','BreadcrumbList'].includes(type));
   if(specialized.includes('FAQPage')&&!(page.faq?.length)){specialized.splice(specialized.indexOf('FAQPage'),1);schemaWarnings.push('FAQPage requires visible questions and answers');}
@@ -79,13 +90,22 @@ export function buildSeo(page:SeoPage,site:SiteIdentity) {
   if(selected.includes('ItemList')&&!page.items?.length)schemaWarnings.push('ItemList requires visible items');
   if(selected.includes('BreadcrumbList')){if(page.breadcrumbs?.length)selectedGraph.push({'@type':'BreadcrumbList',itemListElement:page.breadcrumbs.map((crumb,index)=>({'@type':'ListItem',position:index+1,name:crumb.name,item:canonicalFor(crumb.slug,site)}))});else schemaWarnings.push('BreadcrumbList requires visible navigation breadcrumbs');}
  }
- const jsonLd=page.customSchema?validateCustomSchema(page.customSchema):{'@context':'https://schema.org','@graph':selectedGraph};
+ const custom=page.customSchema?applicableCustomSchema(validateCustomSchema(page.customSchema),page.type??'page',schemaWarnings):null;
+ if(page.customSchema&&!custom)schemaWarnings.push('Custom schema was not applied; the generated schema is used instead');
+ const jsonLd=custom??{'@context':'https://schema.org','@graph':selectedGraph};
  const alternates:Record<string,string>={[locale]:canonical};
  for(const translation of page.translations??[])if(translation.published&&translation.reciprocal&&/^[a-z]{2,3}(?:-[A-Za-z0-9]{2,8})*$/.test(translation.locale))alternates[translation.locale]=canonicalFor(translation.slug,site);
  return {title,description,canonical,schemaWarnings,robots:{index:publicPage,follow:publicPage},alternates:{canonical,languages:alternates},openGraph:{title:page.socialTitle??title,description:page.socialDescription??description,url:canonical,siteName:site.name,type:page.type==='article'?'article':'website',locale:locale.replace('-','_'),images:[{url:image,width:1200,height:630,alt:page.socialImageAlt??`${page.title} — ${site.name}`}]},twitter:{card:'summary_large_image',title:page.socialTitle??title,description:page.socialDescription??description,images:[image],...(site.socialHandle&&/^@[A-Za-z0-9_]{1,15}$/.test(site.socialHandle)?{site:site.socialHandle}:{})},jsonLd};
 }
 export function jsonLdScript(value:unknown):string {return JSON.stringify(value).replace(/</g,'\\u003c').replace(/>/g,'\\u003e').replace(/&/g,'\\u0026').replace(/\u2028/g,'\\u2028').replace(/\u2029/g,'\\u2029');}
-export function buildSitemap(pages:SeoPage[],site:SiteIdentity):string {
- const urls=pages.filter(page=>page.status==='published'&&page.indexable!==false).flatMap(page=>{const seo=buildSeo(page,site);if(seo.canonical!==canonicalFor(page.slug,site))return[];return [`<url><loc>${escapeHtml(seo.canonical)}</loc>${page.updatedAt&&!Number.isNaN(Date.parse(page.updatedAt))?`<lastmod>${new Date(page.updatedAt).toISOString()}</lastmod>`:''}${Object.entries(seo.alternates.languages).map(([lang,url])=>`<xhtml:link rel="alternate" hreflang="${escapeHtml(lang)}" href="${escapeHtml(url)}"/>`).join('')}</url>`];});
- return `<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:xhtml="http://www.w3.org/1999/xhtml">${urls.join('')}</urlset>`;
+export interface SitemapSkip {id?:string;slug:string;code:string;}
+/** One invalid page is skipped and reported instead of breaking the whole sitemap; an invalid site identity still throws. */
+export function buildSitemapReport(pages:SeoPage[],site:SiteIdentity):{xml:string;skipped:SitemapSkip[]} {
+ canonicalFor('/',site);const skipped:SitemapSkip[]=[];
+ const urls=pages.filter(page=>page.status==='published'&&page.indexable!==false).flatMap(page=>{try{const seo=buildSeo(page,site);if(seo.canonical!==canonicalFor(page.slug,site))return[];return [`<url><loc>${escapeHtml(seo.canonical)}</loc>${page.updatedAt&&!Number.isNaN(Date.parse(page.updatedAt))?`<lastmod>${new Date(page.updatedAt).toISOString()}</lastmod>`:''}${Object.entries(seo.alternates.languages).map(([lang,url])=>`<xhtml:link rel="alternate" hreflang="${escapeHtml(lang)}" href="${escapeHtml(url)}"/>`).join('')}</url>`];}
+  catch(error){skipped.push({...(page.id?{id:page.id}:{}),slug:String(page.slug).slice(0,200),code:error instanceof DomainError?error.code:'SITEMAP_PAGE'});return [];}});
+ return {xml:`<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:xhtml="http://www.w3.org/1999/xhtml">${urls.join('')}</urlset>`,skipped};
+}
+export function buildSitemap(pages:SeoPage[],site:SiteIdentity,onSkip:(skipped:SitemapSkip[])=>void=skipped=>console.warn(`Sitemap skipped ${skipped.length} invalid page(s): ${skipped.map(item=>`${item.slug} (${item.code})`).join(', ')}`)):string {
+ const report=buildSitemapReport(pages,site);if(report.skipped.length)onSkip(report.skipped);return report.xml;
 }

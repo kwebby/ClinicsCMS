@@ -75,3 +75,55 @@ export function validateCertificate(certificatePem: string, keyPem: string, doma
   if (!certificate.checkHost(domain) || !certificate.checkPrivateKey(createPrivateKey(keyPem))) throw new Error('TLS certificate hostname or private key does not match.');
   if (Date.parse(certificate.validFrom) > at.getTime() || Date.parse(certificate.validTo) < at.getTime() + 7 * 86400000) throw new Error('TLS certificate is not yet valid or expires in less than seven days.');
 }
+
+export type ComposeVolume = { type?: string; source?: string; target?: string; read_only?: boolean };
+export type ComposeService = { environment?: Record<string, string | null>; networks?: Record<string, unknown>; network_mode?: string; ports?: unknown[]; volumes?: ComposeVolume[]; cap_drop?: string[]; cap_add?: string[]; security_opt?: string[]; read_only?: boolean; user?: string; command?: unknown };
+export type ComposeConfig = { services: Record<string, ComposeService>; networks?: Record<string, { internal?: boolean } | null> };
+/** Values that let a process act as the clinic application, or administer/restore its stores. */
+export const APPLICATION_SECRETS = ['DATABASE_URL', 'DATABASE_PASSWORD', 'APP_ENCRYPTION_KEY', 'BOOTSTRAP_TOKEN', 'REDIS_URL', 'VALKEY_PASSWORD', 'GOOGLE_APPLICATION_CREDENTIALS', 'FIREBASE_CREDENTIALS_FILE', 'POSTGRES_ADMIN_PASSWORD', 'MYSQL_ROOT_PASSWORD', 'DATA_TRANSFER_KEY'] as const;
+const ADMIN_SECRETS = ['POSTGRES_ADMIN_PASSWORD', 'MYSQL_ROOT_PASSWORD', 'DATA_TRANSFER_KEY'];
+/** Services that must drop every capability, forbid privilege escalation and run with a read-only root filesystem. */
+export const HARDENED_SERVICES = ['api', 'worker', 'web', 'pdf-worker', 'analyzer-worker', 'clamav'] as const;
+
+/** Checks the output of `docker compose config --format json`. Messages name services and keys only, never values. */
+export function composeConfigErrors(config: ComposeConfig, options: Pick<DeploymentOptions, 'database' | 'proxy'>): string[] {
+  const errors: string[] = [], services = config.services || {};
+  const require = (condition: unknown, message: string) => { if (!condition) errors.push(message); };
+  const env = (name: string) => services[name]?.environment || {};
+  const networks = (name: string) => Object.keys(services[name]?.networks || {}).sort();
+  const onlyVolumes = (name: string, targets: string[]) => require((services[name]?.volumes || []).every(volume => volume.type !== 'bind' && targets.includes(volume.target || '')), `${name} mounts more than its dedicated volume`);
+  require(services[options.proxy] && !services[options.proxy === 'nginx' ? 'apache' : 'nginx'], 'Exactly the selected proxy must be enabled.');
+  require(!!services.postgres === (options.database === 'postgres') && !!services.mysql === (options.database === 'mysql'), 'Exactly the selected local database profile must be enabled.');
+  for (const [name, service] of Object.entries(services)) {
+    if (name !== options.proxy) require(!service.ports?.length, `${name} exposes an internal port`);
+    if (['api', 'worker', 'web', 'analyzer-worker', 'pdf-worker', 'clamav'].includes(name)) for (const forbidden of ADMIN_SECRETS) require(!(forbidden in env(name)), `${name} receives an administrator/recovery secret`);
+  }
+  for (const name of ['web', 'pdf-worker', 'analyzer-worker', 'clamav']) if (services[name]) for (const secret of APPLICATION_SECRETS) require(!(secret in env(name)), `${name} receives application secret ${secret}`);
+  for (const name of HARDENED_SERVICES) {
+    const service = services[name];
+    if (!service) { errors.push(`${name} service is missing`); continue; }
+    require(service.cap_drop?.includes('ALL') && !service.cap_add?.length, `${name} must drop all capabilities`);
+    require(service.security_opt?.some(option => /^no-new-privileges(:true|=true)?$/.test(option)), `${name} must set no-new-privileges`);
+    require(service.read_only === true, `${name} must use a read-only root filesystem`);
+  }
+  require(!networks('web').includes('backend') && !networks(options.proxy).includes('backend'), 'web and proxy must not join the database/queue network');
+  require(services['pdf-worker']?.network_mode === 'none', 'pdf-worker must have no network');
+  onlyVolumes('pdf-worker', ['/run/clinic-pdf']);
+  require(networks('analyzer-worker').join() === 'analyzer-egress', 'analyzer-worker must only use analyzer-egress');
+  onlyVolumes('analyzer-worker', ['/run/clinic-analyzer']);
+  require(networks('clamav').join() === 'scanner,scanner-egress', 'clamav must only join the scanner and scanner-egress networks');
+  require(config.networks?.scanner?.internal === true, 'scanner network must be internal');
+  require(networks('api').includes('scanner') && Object.entries(services).every(([name]) => ['api', 'clamav'].includes(name) || !networks(name).includes('scanner')), 'only api may reach the scanner network');
+  require(services.clamav?.user && !/^(root|0)(:|$)/.test(services.clamav.user), 'clamav must run as a non-root user');
+  onlyVolumes('clamav', ['/var/lib/clamav']);
+  require(env('api').REQUIRE_STAFF_MFA === 'true', 'api must require staff MFA');
+  require(env('worker').OUTBOUND_WORKERS_ENABLED === 'false', 'worker must start with outbound delivery disabled');
+  require(/^redis:\/\/:[a-f0-9]{64}@valkey:6379$/.test(env('api').REDIS_URL || ''), 'api queue URL must carry the generated Valkey password');
+  if (services.postgres) {
+    require(env('postgres').POSTGRES_USER === 'postgres', 'postgres administrator must be the separate postgres role');
+    const volumes = services.postgres.volumes || [], archive = volumes.find(volume => volume.target === '/wal-archive');
+    require(archive?.type === 'volume' && archive.source !== volumes.find(volume => volume.target === '/var/lib/postgresql/data')?.source && JSON.stringify(services.postgres.command || '').includes('/wal-archive/'), 'postgres must archive WAL to its own volume');
+  }
+  if (options.database === 'firestore') for (const name of ['api', 'worker']) require(services[name]?.volumes?.some(volume => volume.target === '/run/secrets/firebase.json' && volume.read_only), `${name} must mount Firestore credentials read-only`);
+  return errors;
+}

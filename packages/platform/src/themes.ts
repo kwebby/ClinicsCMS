@@ -8,7 +8,7 @@ import yazl from 'yazl';
 import sharp from 'sharp';
 import { z } from 'zod';
 import { validLocationSlug } from '../../contracts/src/website.js';
-import { Actor, Database, Entity, assert } from '../../contracts/src/index.js';
+import { Actor, Database, DomainError, Entity, assert } from '../../contracts/src/index.js';
 import { entity, id, inOrganization, requireRoles } from './common.js';
 import { ClamAvScanner, MalwareScanner, detectMime, privateRead, scanBuffer, segment } from './files.js';
 
@@ -25,9 +25,24 @@ export const themeManifestSchema = z.object({
 }).strict();
 export type ThemeManifest = z.infer<typeof themeManifestSchema>;
 export interface ValidatedTheme {manifest:ThemeManifest;files:Map<string,Buffer>;sha256:string;}
+/** Archive path rules shared by the server validator and `pnpm theme:package`. */
+export const THEME_PATHS = {maxLength:200, file:/^assets\/[A-Za-z0-9_/-]+\.(png|jpg|jpeg|webp|woff2)$/, directory:/^assets(?:\/[A-Za-z0-9_-]+)*$/} as const;
+const safeArchivePath=(name:string)=>name.length<=THEME_PATHS.maxLength && !name.includes('\\') && !name.includes('\0') && !name.startsWith('/') && !name.split('/').some(part=>part==='..'||part==='.'||part==='');
+export const isThemeFilePath=(name:string)=>safeArchivePath(name)&&(name==='theme.json'||THEME_PATHS.file.test(name));
+export const isThemeDirectoryPath=(name:string)=>name.length<=THEME_PATHS.maxLength&&THEME_PATHS.directory.test(name);
 function validArchivePath(name:string) {
- assert(name.length<=200 && !name.includes('\\') && !name.includes('\0') && !name.startsWith('/') && !name.split('/').some(part=>part==='..'||part==='.'||part===''), 'THEME_PATH','Invalid archive path');
- assert(name==='theme.json'||/^assets\/[A-Za-z0-9_/-]+\.(png|jpg|jpeg|webp|woff2)$/.test(name), 'THEME_FILE','Theme contains an unsupported file');
+ assert(safeArchivePath(name), 'THEME_PATH','Invalid archive path');
+ assert(isThemeFilePath(name), 'THEME_FILE','Theme contains an unsupported file');
+}
+/** Decodes and re-encodes in the same format: drops EXIF/GPS/ICC metadata, trailing payloads and container extras before assets become public. */
+async function reencodeThemeImage(contents:Buffer,mime:string):Promise<Buffer> {
+ let output:Buffer;
+ try{
+  const image=sharp(contents,{limitInputPixels:40_000_000,animated:false}),metadata=await image.metadata();
+  assert(metadata.width&&metadata.height&&metadata.width*metadata.height<=40_000_000&&(!metadata.pages||metadata.pages===1),'THEME_IMAGE','Theme images must be single-frame and within the 40 megapixel budget');
+  const oriented=image.rotate();output=await (mime==='image/png'?oriented.png():mime==='image/webp'?oriented.webp({quality:90}):oriented.jpeg({quality:90})).toBuffer();
+ }catch(error){if(error instanceof DomainError)throw error;assert(false,'THEME_IMAGE','Invalid theme image');}
+ assert(output.length<=THEME_LIMITS.fileBytes,'THEME_IMAGE','Theme image exceeds the per-file limit after re-encoding');return output;
 }
 export async function validateThemeZip(bytes:Buffer, scanner:MalwareScanner=new ClamAvScanner()):Promise<ValidatedTheme> {
  assert(bytes.length>0 && bytes.length<=THEME_LIMITS.compressedBytes,'THEME_SIZE','Theme ZIP exceeds the 25 MiB limit');
@@ -44,7 +59,7 @@ export async function validateThemeZip(bytes:Buffer, scanner:MalwareScanner=new 
     const mode=(entry.externalFileAttributes>>>16)&0xffff;
     assert((mode&0o170000)!==0o120000,'THEME_SYMLINK','Theme links are forbidden');
     assert((entry.generalPurposeBitFlag&1)===0,'THEME_ENCRYPTED','Encrypted archives are forbidden');
-    if(entry.fileName.endsWith('/')) {const directory=entry.fileName.slice(0,-1); assert(/^assets(?:\/[A-Za-z0-9_-]+)*$/.test(directory),'THEME_PATH','Invalid theme directory');zip.readEntry();return;}
+    if(entry.fileName.endsWith('/')) {assert(isThemeDirectoryPath(entry.fileName.slice(0,-1)),'THEME_PATH','Invalid theme directory');zip.readEntry();return;}
     validArchivePath(entry.fileName);
     assert(!files.has(entry.fileName),'THEME_DUPLICATE','Duplicate archive path');
     assert(entry.uncompressedSize<=THEME_LIMITS.fileBytes && entry.uncompressedSize/(entry.compressedSize||1)<=THEME_LIMITS.ratio,'THEME_BOMB','Unsafe archive compression ratio or entry size');
@@ -65,7 +80,7 @@ export async function validateThemeZip(bytes:Buffer, scanner:MalwareScanner=new 
   const mime=detectMime(contents);
   const expected=name.endsWith('.woff2')?'font/woff2':name.endsWith('.png')?'image/png':name.endsWith('.webp')?'image/webp':'image/jpeg';
   assert(mime===expected,'THEME_ASSET','Theme asset content does not match its extension');
-  if(mime?.startsWith('image/')) {let metadata:{width?:number;height?:number};try{metadata=await sharp(contents,{limitInputPixels:40_000_000}).metadata();}catch{assert(false,'THEME_IMAGE','Invalid theme image');}assert(metadata.width&&metadata.height&&metadata.width*metadata.height<=40_000_000,'THEME_IMAGE','Theme image exceeds pixel budget');}
+  if(mime?.startsWith('image/'))files.set(name,await reencodeThemeImage(contents,mime));
  }
  const manifest=result.data;
  for(const blocks of Object.values(manifest.layouts))for(const block of blocks??[])if(block.image)assert(files.has(block.image),'THEME_ASSET','Referenced image is missing');
@@ -73,8 +88,12 @@ export async function validateThemeZip(bytes:Buffer, scanner:MalwareScanner=new 
  return {manifest,files,sha256:createHash('sha256').update(bytes).digest('hex')};
 }
 export function bootstrapTheme():ThemeManifest {return themeManifestSchema.parse({formatVersion:1,name:'Careline',slug:'careline',version:'1.0.0',description:'A calm, accessible clinic website',author:'ClinicsCMS',license:'MIT',tokens:{primary:'#18756B',secondary:'#D1E9E3',background:'#FAFBF8',text:'#172B29',muted:'#586E69',radius:16,fontFamily:'sans',baseFontSize:16,maxWidth:1200},layouts:{home:[{id:'welcome',type:'hero',variant:'split',heading:'Care that fits your life'},{id:'care',type:'services'},{id:'team',type:'doctors'},{id:'visit',type:'contact'},{id:'footer',type:'footer'}],page:[{id:'content',type:'article'}],article:[],service:[],doctor:[],contact:[],tool:[]},navigation:[{label:'Our care',href:'/services'},{label:'Doctors',href:'/doctors'},{label:'Plan your visit',href:'/contact'}]});}
+type PublishedSite={manifest:unknown;publicationId:string;themeId:unknown;pages:Record<string,unknown>[];settings:{business:Record<string,unknown>;website:Record<string,unknown>}};
+function deepFreeze<T>(value:T):T {if(value&&typeof value==='object'&&!Object.isFrozen(value)){Object.freeze(value);for(const item of Object.values(value))deepFreeze(item);}return value;}
 export class ThemeService {
  private readonly root:string;private readonly scanner:MalwareScanner;
+ /** Per-organization public site keyed by its immutable publication ID; the pointer is still read on every call, so other processes' publishes are seen. */
+ private readonly siteCache=new Map<string,{publicationId:string;site:PublishedSite}>();
  constructor(private readonly db:Database,options:{root:string;scanner?:MalwareScanner}) {this.root=resolve(options.root);this.scanner=options.scanner??new ClamAvScanner();}
  async importZip(bytes:Buffer,actor:Actor) {
   requireRoles(actor,['owner','admin','editor']);
@@ -102,11 +121,13 @@ export class ThemeService {
   try{return await this.db.transaction([`site-publication:${actor.organizationId}`,`${actor.organizationId}:pages`,`${actor.organizationId}:settings`],async tx=> {
    const pointerId=`site-publication:${actor.organizationId}`,pointer=await tx.get('settings',pointerId);
    if(expectedPublicationId!==undefined)assert((pointer?.publicationId??'')===expectedPublicationId,'VERSION_CONFLICT','Website publication changed; refresh before publishing',409);
-   const settings=await tx.list('settings',{eq:{organizationId:actor.organizationId},limit:1000});
-   const pages=await tx.list('pages',{eq:{organizationId:actor.organizationId},limit:1000});
-   const contentSnapshots:{id:string;version:number;path:string;sha256:string}[]=[];
-   for(const page of pages){
-    if(!page.publishedSnapshot||page.status==='archived')continue;
+   // Pages through every row (ascending id cursor): a silent row cap would drop pages and miss slug conflicts.
+   const eachRow=async(collection:string,visit:(row:Entity)=>Promise<void>|void)=>{const size=500;let after:string|undefined;for(;;){const rows=await tx.list(collection,{eq:{organizationId:actor.organizationId},limit:size,...(after?{after}:{})});for(const row of rows)await visit(row);if(rows.length<size)return;after=rows[rows.length-1].id;}};
+   const settings:Entity[]=[];await eachRow('settings',row=>{if(['business','website'].includes(String(row.key??row.id)))settings.push(row);});
+   const pageSlugs=new Set<string>(),contentSnapshots:{id:string;version:number;path:string;sha256:string}[]=[];
+   await eachRow('pages',async page=>{
+    pageSlugs.add(String(page.slug));
+    if(!page.publishedSnapshot||page.status==='archived')return;
     const snapshot=page.publishedSnapshot as Record<string,unknown>;
     const allowed=['id','version','title','slug','kind','locale','content','seo','citations','publishedAt','renderVersion','reviewedBy','reviewedAt','reviewer','branchId'];
     const safe=Object.fromEntries(allowed.filter(key=>snapshot[key]!==undefined).map(key=>[key,snapshot[key]]));
@@ -114,34 +135,35 @@ export class ThemeService {
     const filename=`${segment(page.id)}.json`,temporary=join(directory,`${id()}.tmp`);
     const handle=await open(temporary,'wx',0o600);try{await handle.writeFile(bytes);}finally{await handle.close();}await rename(temporary,join(directory,filename));
     contentSnapshots.push({id:page.id,version:Number(snapshot.version??page.publishedVersion??page.version),path:filename,sha256:createHash('sha256').update(bytes).digest('hex')});
-   }
+   });
    const business=(settings.find(row=>row.key==='business'||row.id==='business')?.value??{}) as Record<string,unknown>;
    const website=(settings.find(row=>row.key==='website'||row.id==='website')?.value??{}) as Record<string,unknown>;
    const locationSlugs=new Set(((website.locations??[]) as {slug:string}[]).map(location=>location.slug));
    for(const slug of locationSlugs)assert(validLocationSlug(slug),'SLUG_CONFLICT','Location URL conflicts with an application route',409);
-   for(const page of pages)assert(!locationSlugs.has(String(page.slug)),'SLUG_CONFLICT','Location URL conflicts with a CMS page',409);
-   for(const route of await tx.list('pageRoutes',{eq:{organizationId:actor.organizationId},limit:1000}))assert(!locationSlugs.has(String(route.slug)),'SLUG_CONFLICT','Location URL conflicts with a permanent page route',409);
+   for(const slug of locationSlugs)assert(!pageSlugs.has(slug),'SLUG_CONFLICT','Location URL conflicts with a CMS page',409);
+   await eachRow('pageRoutes',route=>assert(!locationSlugs.has(String(route.slug)),'SLUG_CONFLICT','Location URL conflicts with a permanent page route',409));
    const publicBusiness=Object.fromEntries(['clinicName','name','country','currency','timezone','locale','address','email','phone','website','publicBooking','logoFileId'].filter(key=>business[key]!==undefined).map(key=>[key,business[key]]));
    const publicWebsite=Object.fromEntries(['siteName','origin','description','locale','socialImage','socialImageAlt','socialHandles','searchConsoleVerification','navigation','homepage','branding','locations','header','footer'].filter(key=>website[key]!==undefined).map(key=>[key,website[key]]));
    const publication=entity(actor.organizationId,{kind:'site',themeId,manifest:theme.manifest,settingsRevisions:settings.filter(row=>['business','website'].includes(String(row.key??row.id))).map(row=>({id:row.id,version:row.version})),publicSettings:{business:publicBusiness,website:publicWebsite},contentSnapshots,publishedBy:actor.id,previousPublicationId:pointer?.publicationId??null},publicationId);
    await tx.put('publications',publication);
    const next=pointer?{...pointer,publicationId:publication.id,version:pointer.version+1,updatedAt:new Date().toISOString()}:entity(actor.organizationId,{publicationId:publication.id},pointerId);
    await tx.put('settings',next,pointer?.version);return publication;
-  });}catch(error){await rm(directory,{recursive:true,force:true});throw error;}
+  });}catch(error){await rm(directory,{recursive:true,force:true});throw error;}finally{this.siteCache.delete(actor.organizationId);}
  }
  async rollback(actor:Actor,expectedPublicationId?:string) {
   requireRoles(actor,['owner','admin','editor']);
-  return this.db.transaction([`site-publication:${actor.organizationId}`],async tx=> {
+  try{return await this.db.transaction([`site-publication:${actor.organizationId}`],async tx=> {
    const pointer=await tx.get('settings',`site-publication:${actor.organizationId}`);assert(pointer,'NO_PUBLICATION','No publication to roll back');
    if(expectedPublicationId!==undefined)assert(pointer.publicationId===expectedPublicationId,'VERSION_CONFLICT','Website publication changed',409);
    const current=await tx.get('publications',String(pointer.publicationId));assert(current?.previousPublicationId,'NO_PREVIOUS_PUBLICATION','No previous publication to restore');
    const previous=await tx.get('publications',String(current.previousPublicationId));assert(previous&&previous.organizationId===actor.organizationId,'NOT_FOUND','Previous publication not found',404);
    await tx.put('settings',{...pointer,publicationId:previous.id,version:pointer.version+1,updatedAt:new Date().toISOString()},pointer.version);return previous;
-  });
+  });}finally{this.siteCache.delete(actor.organizationId);}
  }
- async publicSite(organizationId:string) {
+ async publicSite(organizationId:string):Promise<PublishedSite|{manifest:ThemeManifest;publicationId:null;themeId?:undefined;pages:null;settings:null}> {
   const pointer=await this.db.get('settings',`site-publication:${organizationId}`);
   if(!pointer)return {manifest:bootstrapTheme(),publicationId:null,pages:null,settings:null};
+  const cached=this.siteCache.get(organizationId);if(cached&&cached.publicationId===String(pointer.publicationId))return cached.site;
   const publication=await this.db.get('publications',String(pointer.publicationId));assert(publication?.organizationId===organizationId,'PUBLICATION_MISSING','Website publication unavailable',503);
   const pages:Record<string,unknown>[]=[];
   for(const snapshot of (publication.contentSnapshots??[]) as {id:string;path:string;sha256:string}[]){
@@ -149,7 +171,10 @@ export class ThemeService {
    const bytes=await privateRead(join(this.root,'publications',segment(organizationId),segment(publication.id),snapshot.path));
    assert(createHash('sha256').update(bytes).digest('hex')===snapshot.sha256,'PUBLICATION_INTEGRITY','Publication snapshot failed integrity check',500);pages.push(JSON.parse(bytes.toString('utf8')));
   }
-  return {manifest:publication.manifest,publicationId:publication.id,themeId:publication.themeId,pages,settings:publication.publicSettings as {business:Record<string,unknown>;website:Record<string,unknown>}};
+  // Frozen because every anonymous request shares this object until the next publish or rollback.
+  const site:PublishedSite=deepFreeze({manifest:publication.manifest,publicationId:publication.id,themeId:publication.themeId,pages,settings:publication.publicSettings as {business:Record<string,unknown>;website:Record<string,unknown>}});
+  this.siteCache.delete(organizationId);this.siteCache.set(organizationId,{publicationId:publication.id,site});if(this.siteCache.size>100)this.siteCache.delete(this.siteCache.keys().next().value!);
+  return site;
  }
  async asset(themeId:string,path:string,organizationId:string,actor?:Actor) {
   validArchivePath(path);assert(path!=='theme.json','NOT_FOUND','Asset not found',404);

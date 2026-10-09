@@ -22,11 +22,11 @@
 | BullMQ / ioredis | `6.3.12` / `5.8.2` | Queue execution and server-side sessions |
 | Socket.IO server/client | `4.8.1` | Authorized chat and live events |
 | Sharp | `0.35.5` | Public-image validation and re-encoding |
-| Playwright | `1.56.1` | Chromium PDF generation and browser tests |
+| Playwright | `playwright-core` `1.56.1` (production dependency, loaded only when the PDF worker renders); `@playwright/test` `1.56.1` (development only) | Chromium PDF generation; browser tests |
 | Vitest | `5.0.3` | Unit and contract tests |
 | tsx | `4.20.6` | TypeScript development/maintenance scripts |
 
-Other runtime dependencies include Express 5.1.0, Zod 4.1.12, Decimal.js 10.6.0, Nodemailer 10.0.16, Stripe 19.1.0, bcryptjs 3.0.2, OTPAuth 9.4.1, Helmet 8.1.0, sanitize-html 2.18.0, and the bounded ZIP readers/writers. The manifests list all exact direct versions; the lockfile records transitive resolutions and integrity values.
+Other runtime dependencies include Express 5.1.0, Zod 4.1.12, Decimal.js 10.6.0, Nodemailer 10.0.16, Stripe 19.1.0, bcryptjs 3.0.2, OTPAuth 9.4.1, Helmet 8.1.0, and the bounded ZIP readers/writers. HTML output is produced by the application's own escaping renderers; no HTML sanitizer package is shipped. The manifests list all exact direct versions; the lockfile records transitive resolutions and integrity values.
 
 The `@clinic/web` workspace scope and internal `clinic_*` SQL identifiers are technical names retained for compatibility. The product and public repository are **ClinicsCMS**.
 
@@ -42,7 +42,7 @@ The `@clinic/web` workspace scope and internal `clinic_*` SQL identifiers are te
 | ClamAV | `1.5.4-debian` | Required for uploads/theme import; current signatures required |
 | Nginx | `1.30.5` | One reverse-proxy option |
 | Apache HTTP Server | `2.4.69` | Alternative reverse proxy |
-| Isolated PDF worker | Built from the repository; Playwright Chromium | Required for production PDF generation |
+| Isolated PDF worker | Built from the repository; Chromium installed by `playwright-core` | Required for production PDF generation |
 | Isolated analyzer worker | Built from the repository | Required for the public business website analyzer |
 
 All shipped third-party image references include digests in [`deploy/compose.yml`](../deploy/compose.yml), its PostgreSQL 18 override, and [`deploy/Dockerfile`](../deploy/Dockerfile). Tags above are a readable inventory, not permission to discard the digest. Review newer patches and rebuild deliberately. Recorded native SQL test patches and pinned container patches differ; see [implementation evidence](IMPLEMENTATION-STATUS.md).
@@ -51,13 +51,13 @@ Choose one authoritative database. Valkey is not the durable business record sto
 
 ## Native dependencies
 
-**Docker deployment:** the build/application images supply Node and pnpm. The application image installs `clamdscan` and trusted CA certificates. The PDF image installs the exact Playwright Chromium build and its Linux libraries with `playwright install --with-deps chromium`. Database, queue, scanner daemon, and proxy come from their separate images. Do not expose the private storage volume as a static web directory.
+**Docker deployment:** the build stage supplies pnpm and compiles the application. A separate stage installs only the root package's production dependencies from the lockfile (`pnpm install --frozen-lockfile --prod --filter clinicscms`). The application, web and PDF runtime images start from a Node base with npm, npx, corepack and yarn removed, and contain the compiled output plus those production dependencies (web: the Next.js standalone output). The application image installs `clamdscan` and trusted CA certificates. The PDF image installs the exact Chromium build for `playwright-core` and its Linux libraries with `playwright-core install --with-deps chromium`, and has no scanner client. Database, queue, scanner daemon, and proxy come from their separate images. Do not expose the private storage volume as a static web directory.
 
 **Native development:** provide a PostgreSQL/MySQL service or configured remote database, Valkey/Redis-compatible service, `clamdscan` plus a running ClamAV daemon and signatures, and a writable private storage directory. Install Chromium via `pnpm exec playwright install chromium`; Linux may also need `pnpm exec playwright install-deps chromium` with administrator privileges. Uploads fail if the scanner is absent, even in a development UI.
 
 Sharp and esbuild use platform-specific binaries. The workspace permits their necessary install hooks. Do not pass `--ignore-scripts` indiscriminately or copy `node_modules` between operating systems/architectures. Install on the target platform. Unsupported platforms compiling Sharp from source need a compiler toolchain and compatible libvips; using the supplied Debian-based build image avoids requiring that toolchain on the host.
 
-The PDF worker imports `@playwright/test` at runtime. It is currently declared under development dependencies, and the shipped application build retains those dependencies intentionally. A hand-built production image using `pnpm install --prod` alone is incomplete for PDF rendering. Follow the supplied Dockerfile until runtime dependencies are split into a separate package.
+Runtime code imports only production dependencies; CI's `pnpm audit --prod` and production license check therefore cover what the images ship. The PDF code imports `playwright-core` lazily, only when a local render runs, so the API and worker never load it at startup. A hand-built production install (`pnpm install --prod`) is complete for the API, worker, analyzer and PDF worker; the PDF worker additionally needs the Chromium build (`node node_modules/playwright-core/cli.js install chromium`).
 
 ## Optional external integrations and tooling
 

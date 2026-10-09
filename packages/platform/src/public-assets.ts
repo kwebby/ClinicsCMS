@@ -3,7 +3,7 @@ import { mkdir, open, rm } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import { join, resolve } from 'node:path';
 import sharp from 'sharp';
-import { Actor, Database, assert } from '../../contracts/src/index.js';
+import { Actor, Database, DomainError, assert } from '../../contracts/src/index.js';
 import { entity, id, requireRoles } from './common.js';
 import { ClamAvScanner, MalwareScanner, detectMime, privateRead, scanBuffer, segment } from './files.js';
 
@@ -22,7 +22,7 @@ export class PublicAssetService {
    const image=sharp(input.bytes,{limitInputPixels:40_000_000,animated:false}),metadata=await image.metadata();
    assert(metadata.width&&metadata.height&&(!metadata.pages||metadata.pages===1),'ASSET_IMAGE','Use a single-frame public image');
    const output=await image.rotate().resize({width:2400,height:2400,fit:'inside',withoutEnlargement:true}).webp({quality:85}).toBuffer({resolveWithObject:true});bytes=output.data;width=output.info.width;height=output.info.height;
-  }catch(error){if(error instanceof Error&&error.name==='DomainError')throw error;assert(false,'ASSET_IMAGE','Image could not be safely decoded');}
+  }catch(error){if(error instanceof DomainError)throw error;assert(false,'ASSET_IMAGE','Image could not be safely decoded');}
   // Re-encoding removes EXIF/location metadata, appended payloads and untrusted image container structures.
   const assetId=id(),directory=join(this.root,'public-assets',segment(actor.organizationId));await mkdir(directory,{recursive:true,mode:0o700});
   const path=join(directory,assetId),handle=await open(path,'wx',0o600);try{await handle.writeFile(bytes);}finally{await handle.close();}
