@@ -23,7 +23,7 @@ jobs:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
         with: {fetch-depth: 0}
       - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444
-        with: {node-version: '24.21.0'}
+        with: {node-version: '24.21.0', package-manager-cache: false}
       - run: corepack enable && corepack prepare pnpm@11.22.0 --activate
       - run: pnpm install --frozen-lockfile
       - run: pnpm typecheck
@@ -107,7 +107,7 @@ jobs:
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
       - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444
-        with: {node-version: '24.21.0'}
+        with: {node-version: '24.21.0', package-manager-cache: false}
       - run: corepack enable && corepack prepare pnpm@11.22.0 --activate
       - run: pnpm install --frozen-lockfile
       - run: pnpm test:contracts
@@ -124,7 +124,7 @@ jobs:
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
       - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444
-        with: {node-version: '24.21.0'}
+        with: {node-version: '24.21.0', package-manager-cache: false}
       - run: corepack enable && corepack prepare pnpm@11.22.0 --activate
       - run: pnpm install --frozen-lockfile
       - name: Certify disposable Supabase database
