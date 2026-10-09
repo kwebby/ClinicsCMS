@@ -13,7 +13,7 @@ Author comments identify **ramanpal singh — https://kwebby.com** throughout ma
 
 Workspace create/detail/edit/action/revision routes, theme design/upload/preview, chat threads, and patient sections use dedicated pages. Tables have authorized status shortcuts; appointments and leave have month/week/day calendars; appointments, inquiries, and tasks have Kanban views with drag-and-drop and keyboard controls. Task progress supports Open, In progress, Blocked, Completed, and reopening with version-checked server transitions. See the [workspace guide](WORKSPACE.md).
 
-Website controls now include nine starter homepage slots, 13 section types, scanned images/buttons/cards/FAQs, branding with nine locally hosted Google font families, navigation/footer controls, canonical location NAP/hours, generated branch pages/schema/sitemaps, dedicated preview and publication rollback. Research inspected 24 official clinic websites across 12 countries/markets; see [research](../artifacts/research/clinic-sites-2026-10/README.md) and [website guide](WEBSITE-SETTINGS.md).
+Website controls now include nine starter homepage slots, 13 section types, scanned images/buttons/cards/FAQs, branding with nine locally hosted Google font families, navigation/footer controls, canonical location NAP/hours, generated branch pages/schema/sitemaps, dedicated preview and publication rollback. Research inspected 24 official clinic websites across 12 countries/markets; see [research](research/clinic-websites-2026-10/README.md) and [website guide](WEBSITE-SETTINGS.md).
 
 ## Recorded local checks
 

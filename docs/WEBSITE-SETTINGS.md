@@ -7,7 +7,7 @@ These controls are available after [installation](INSTALLATION.md) and account s
 
 ## Research and recommended structure
 
-The [24-clinic research report](../artifacts/research/clinic-sites-2026-10/README.md) records official homepages, ordered sections, calls to action, observed imagery metadata, navigation, other-page inventories, sitemap declarations and NAP observations. The sample covers 12 countries/markets. Counts describe observed patterns, not conversion effectiveness or search rankings. Sitemap totals are distinct from verified live-page counts.
+The [24-clinic research summary](research/clinic-websites-2026-10/README.md) reports how often homepage sections and page types appeared across official clinic websites in 12 countries/markets, and how those findings map to the website controls. It publishes aggregate findings only, not business names or per-site observations. Counts describe observed patterns, not conversion effectiveness or search rankings.
 
 The starter homepage has nine slots:
 
