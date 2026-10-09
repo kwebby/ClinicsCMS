@@ -24,6 +24,13 @@ async function login(page: Page, context: BrowserContext, role: string) {
   await page.waitForURL(role === 'patient' ? '**/portal' : '**/workspace');
 }
 const noPopup = (page: Page) => expect(page.locator('dialog:modal')).toHaveCount(0);
+/** Record references are a search combobox: type part of the name, then choose the matching option. */
+async function chooseReference(page: Page, label: string, option: string) {
+  const input = page.getByRole('combobox', { name: label, exact: false });
+  await input.fill(option);
+  await page.getByRole('option', { name: option, exact: true }).click();
+  await expect(input).toHaveValue(option);
+}
 async function openAction(page: Page, label: string, action: string) {
   await page.getByRole('link', { name: label, exact: true }).click();
   await expect(page).toHaveURL(new RegExp(`/actions/${action.replaceAll('.', '\\.')}$`));
@@ -92,7 +99,7 @@ test('staff record, invoice, payment, publication, clinical signature and patien
 
   await page.goto('/workspace/invoices');
   await page.getByRole('link', { name: 'New invoice', exact: true }).click();
-  await page.getByLabel('Patient', { exact: false }).selectOption({ label: name });
+  await chooseReference(page, 'Patient', name);
   await page.getByLabel('Currency').fill('USD');
   await page.getByLabel('description item 1').fill('Fictional E2E consultation');
   await page.getByLabel('unitPrice item 1').fill('125.00');
@@ -150,7 +157,7 @@ test('staff record, invoice, payment, publication, clinical signature and patien
   await login(page, context, 'doctor');
   await page.goto('/workspace/encounters');
   await page.getByRole('link', { name: 'New consultation', exact: true }).click();
-  await page.getByLabel('Patient', { exact: false }).selectOption({ label: name });
+  await chooseReference(page, 'Patient', name);
   await page.getByLabel('Doctor', { exact: false }).selectOption({ label: access!.accounts.find((a) => a.roles.includes('doctor'))!.name });
   await page.locator('.bn-editor').click();
   await page.keyboard.type('Fictional E2E clinical note. No real patient information.');

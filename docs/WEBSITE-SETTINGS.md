@@ -71,3 +71,9 @@ Saving does not update the public website, including before its first theme publ
 The deployed public origin remains authoritative for canonical URLs; operators configure `PUBLIC_URL` and the reverse proxy. The editor's canonical-origin field records the intended HTTPS origin and should match that deployment. Page SEO/schema overrides are available in the existing Pages editor; generated location pages inherit defaults and their canonical branch facts.
 
 The preview uses the same public components as the published pages and disables navigation. Public content remains server-rendered; the interactive editor is limited to authenticated workspace routes.
+
+## Availability and search engines
+
+Public pages are rendered on the server from the published snapshot. If the clinic API cannot be reached, public pages answer with a server error (5xx) rather than a placeholder, so search engines retry later instead of dropping pages; only a page the API reports as missing returns 404. The sitemaps answer 503 while the site is unavailable. Server renders pass the visitor's `X-Forwarded-For` chain to the API so its rate limits apply per visitor.
+
+Page slugs whose first segment belongs to an application route (for example `api`, `booking`, `login`, `portal`, `tools`, `workspace` or `sitemaps`) are rejected for new pages. Older pages with such a slug are left out of the sitemap because the application route takes precedence. A page's **Clinically reviewed** date uses its review date in the clinic's locale and timezone, and the page language attribute follows the site locale.

@@ -1,7 +1,7 @@
 /* Author: ramanpal singh | URL: https://kwebby.com */
 import type { NextConfig } from 'next';
 const config: NextConfig = {
-  output: 'standalone', poweredByHeader: false, devIndicators: false,
+  output: 'standalone', poweredByHeader: false, devIndicators: false, agentRules: false,
   webpack(config) { config.resolve.extensionAlias = { '.js': ['.ts', '.tsx', '.js'], '.mjs': ['.mts', '.mjs'] }; return config; },
   async rewrites() {
     const backend = process.env.API_INTERNAL_URL || 'http://127.0.0.1:4000';
