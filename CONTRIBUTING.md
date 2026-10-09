@@ -7,7 +7,7 @@ Use fictional fixtures only. Keep `.env`, `.runtime`, uploaded files, database e
 
 Business decisions belong in the domain/API, with authorization on every entry point. Database operations must work through the persistence contracts; external effects follow committed outbox events. Changes to shared persistence behavior need the same contract tests across the supported profiles. Do not call a backend certified because unit tests or an emulator pass.
 
-Use dedicated pages for creation, editing and consequential workflows. Preserve accessible inline status shortcuts, calendar and Kanban views. Add public-page metadata through application controls, and use the constrained theme format for theme contributions. Read `apps/web/AGENTS.md` and installed Next.js documentation before changing web code.
+Use dedicated pages for creation, editing and consequential workflows. Preserve accessible inline status shortcuts, calendar and Kanban views. Add public-page metadata through application controls, and use the constrained theme format for theme contributions. Read the installed Next.js documentation (`apps/web/node_modules/next/dist/docs/`) before changing web code.
 
 Before submitting, run `pnpm typecheck`, `pnpm test`, `pnpm build`, and `pnpm deploy:verify`. Add relevant browser, adapter or security regression checks for behavior changes; documentation-only corrections do not require redundant tests. Disclose skipped checks and missing external infrastructure.
 
