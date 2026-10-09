@@ -7,7 +7,7 @@ import type {RecordData,ActionDefinition} from '@/lib/types';
 import {draftIdentity,readMemoryDraft,writeMemoryDraft,removeMemoryDraft,removeMatchingMemoryDraft} from '@/lib/draft-memory';
 import {useSession,useClinicTime} from './session';
 import {Alert} from './ui';
-import {FormFields,initialValues,cleanValues} from './forms';
+import {FormFields,initialValues,cleanValues,updateValues} from './forms';
 import {AiDraft} from './ai-draft';
 
 export function RecordEditor({module,record,onSave,onCancel}:{module:string;record?:RecordData;onSave:(record?:RecordData)=>void;onCancel:()=>void}){
@@ -24,7 +24,7 @@ export function RecordEditor({module,record,onSave,onCancel}:{module:string;reco
     return {values:cached?.values||values,baseline:cached?.baseline||JSON.stringify(values),version:cached?cached.expectedVersion:record?.version,restored:Boolean(cached),conflict:Boolean(cached&&cached.expectedVersion!==record?.version)};
   });
   const [values,setValues]=useState<Record<string,unknown>>(initial.values),[busy,setBusy]=useState(false),[error,setError]=useState(initial.conflict?'The record changed after this draft was started. Your unsaved edits are retained. Review the latest record before applying them.':''),[saveState,setSaveState]=useState(''),[restored,setRestored]=useState(initial.restored),[discarding,setDiscarding]=useState(false);
-  const version=useRef(initial.version),latest=useRef(values),savedJson=useRef(initial.baseline),saving=useRef(false),conflicted=useRef(initial.conflict),mounted=useRef(true);
+  const version=useRef(initial.version),persisted=useRef<Record<string,unknown>>(record||{}),latest=useRef(values),savedJson=useRef(initial.baseline),saving=useRef(false),conflicted=useRef(initial.conflict),mounted=useRef(true);
   useEffect(()=>{mounted.current=true;return()=>{mounted.current=false}},[]);
   const remember=useCallback((next:Record<string,unknown>)=>{
     if(savedJson.current===JSON.stringify(next))removeMemoryDraft(identity,cacheKey);
@@ -40,8 +40,10 @@ export function RecordEditor({module,record,onSave,onCancel}:{module:string;reco
         await action<RecordData>('prescriptions.save',{id:record.id,expectedVersion:version.current,...Object.fromEntries(Object.entries(cleanValues(submitted)).filter(([key])=>['medications','instructions'].includes(key)))}):
         record&&module==='encounters'?
         await action<RecordData>('encounters.save',{id:record.id,expectedVersion:version.current,...Object.fromEntries(Object.entries(cleanValues(submitted)).filter(([key])=>['content','observations','diagnosis','followUpAt'].includes(key)))}):
-        await api<RecordData>(`/records/${module}${record?'/'+encodeURIComponent(record.id):''}`,{method:record?'PATCH':'POST',body:{...cleanValues({...submitted,...(module==='invoices'&&Array.isArray(submitted.lines)?{lines:(submitted.lines as Record<string,unknown>[]).map(line=>Object.fromEntries(Object.entries(line).filter(([key])=>['description','quantity','unitPrice','taxRate','discount'].includes(key))))}:{})}),...(record?{expectedVersion:version.current}:{})}});
-      version.current=result.version;savedJson.current=JSON.stringify(submitted);
+        await api<RecordData>(`/records/${module}${record?'/'+encodeURIComponent(record.id):''}`,{method:record?'PATCH':'POST',body:(()=>{const payload={...submitted,...(module==='invoices'&&Array.isArray(submitted.lines)?{lines:(submitted.lines as Record<string,unknown>[]).map(line=>Object.fromEntries(Object.entries(line).filter(([key])=>['description','quantity','unitPrice','taxRate','discount'].includes(key))))}:{})};
+          // On edit, an emptied optional field is sent as null so the server clears it; create omits empty fields.
+          return record?{...updateValues(payload,persisted.current),expectedVersion:version.current}:cleanValues(payload)})()});
+      version.current=result.version;savedJson.current=JSON.stringify(submitted);persisted.current={...persisted.current,...submitted};
       const current=mounted.current?latest.current:(readMemoryDraft(identity,cacheKey)?.values||latest.current);
       const unchanged=JSON.stringify(current)===savedJson.current;
       if(unchanged)removeMatchingMemoryDraft(identity,cacheKey,submitted);
@@ -91,7 +93,7 @@ export function ActionForm({definition,record,onDone,seed={}}:{definition:Action
   }}>
     {restored&&<Alert kind="info">Your unsaved action draft was restored from this tab. Review it before submitting; nothing was sent automatically. Drafts expire after 30 minutes. <button type="button" className="text-button" disabled={busy} onClick={discard}>Discard restored draft</button></Alert>}
     {definition.hint&&<Alert kind="info">{definition.hint}</Alert>}{error&&<Alert>{error}</Alert>}
-    <fieldset disabled={busy} inert={busy} aria-busy={busy} style={{border:0,margin:0,padding:0,minWidth:0}}><FormFields fields={definition.fields||[]} values={values} onChange={changeValues}/></fieldset>
+    <fieldset disabled={busy} inert={busy} aria-busy={busy} style={{border:0,margin:0,padding:0,minWidth:0}}><FormFields fields={definition.fields||[]} values={values} onChange={changeValues} branchId={record.branchId?String(record.branchId):undefined}/></fieldset>
     <footer className="form-footer"><span>Changes will be recorded in the audit history. Save before refreshing or closing this tab.</span><button className="button primary" disabled={busy||conflict}>{busy?'Saving…':definition.label}</button></footer>
   </form>;
 }

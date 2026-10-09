@@ -19,4 +19,10 @@ export function websiteStyle(branding?:WebsiteBranding):CSSProperties{const b=br
 export const DAYS=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
 export function locationAddress(location:WebsiteLocation){const a=location.address;return [a.streetAddress,a.addressLocality,a.addressRegion,a.postalCode,a.addressCountry].filter(Boolean).join(', ');}
 export function addressText(address?:string|Record<string,string>){if(typeof address==='string')return address;return address?[address.streetAddress,address.addressLocality,address.addressRegion,address.postalCode,address.addressCountry].filter(Boolean).join(', '):'';}
+export const publicAddress=(site:{address?:string|Record<string,string>})=>addressText(site.address);
+/** Dialable `tel:` link from a formatted phone number. */
+export const telHref=(phone:string)=>`tel:${phone.replace(/[^+\d]/g,'')}`;
+/** First path segments owned by application routes; such pages can never be reached, so keep them out of sitemaps. */
+export const RESERVED_SLUG_SEGMENTS:ReadonlySet<string>=new Set(['api','booking','login','register','setup','portal','workspace','tools','accept-invite','verify-email','reset-password','sitemaps','sitemap.xml','robots.txt','opengraph-image','socket.io','_next','fonts']);
+export const isReservedSlug=(slug:unknown)=>RESERVED_SLUG_SEGMENTS.has(String(slug??'').replace(/^\/+/,'').split('/')[0].toLowerCase());
 export function contrastRatio(a:string,b:string){const lum=(hex:string)=>{const values=[1,3,5].map(i=>parseInt(hex.slice(i,i+2),16)/255).map(n=>n<=.04045?n/12.92:((n+.055)/1.055)**2.4);return values[0]*.2126+values[1]*.7152+values[2]*.0722};const x=lum(a),y=lum(b);return (Math.max(x,y)+.05)/(Math.min(x,y)+.05);}

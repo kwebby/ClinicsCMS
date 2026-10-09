@@ -16,7 +16,7 @@ const transitions:Record<string,Record<string,string[]>> = {
 };
 export function workflowState(module:string,row:RecordData):string {return String(row[module==='leads'?'stage':'status']||'');}
 /** Only expose transitions supported by the domain. Authorization is still enforced by the API. */
-export function allowedWorkflowTargets(module:string,row:RecordData):string[] {return transitions[module]?.[workflowState(module,row)]||[];}
+export function allowedWorkflowTargets(module:string,row:RecordData):string[] {const states=Object.hasOwn(transitions,module)?transitions[module]:{},state=workflowState(module,row);return Object.hasOwn(states,state)?states[state]:[];}
 export function workflowLabel(module:string,status:string):string {return kanbanColumns[module]?.find(column=>column.id===status)?.label||status.replaceAll('-',' ')||'Unspecified';}
 
 /** Date keys are calendar coordinates, never browser-local timestamps. */
@@ -31,6 +31,11 @@ export function calendarDates(anchor:string,mode:CalendarMode):string[] {
 export function stepCalendar(anchor:string,mode:CalendarMode,direction:number):string {
   if(mode!=='month')return shiftDateKey(anchor,direction*(mode==='week'?7:1));
   const date=dateKeyDate(`${anchor.slice(0,7)}-01`);date.setUTCMonth(date.getUTCMonth()+direction);return date.toISOString().slice(0,10);
+}
+/** Monday-first weekday names in the clinic's language. */
+export function weekdayNames(locale:string,width:'long'|'short'='long'):string[] {
+  let format:Intl.DateTimeFormat;try{format=new Intl.DateTimeFormat(locale,{weekday:width,timeZone:'UTC'})}catch{format=new Intl.DateTimeFormat('en',{weekday:width,timeZone:'UTC'})}
+  return Array.from({length:7},(_,index)=>format.format(dateKeyDate(shiftDateKey('2024-01-01',index))));
 }
 export function calendarInterval(row:RecordData):{start:Date;end:Date}|null {
   const start=new Date(String(row.startsAt||'')),end=new Date(String(row.endsAt||''));
