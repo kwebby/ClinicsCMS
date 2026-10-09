@@ -194,7 +194,7 @@ pnpm audit --prod --audit-level=high
 | `deploy` | Images, proxy/database profiles, Firebase rules/indexes and egress policy |
 | `tests` | Domain/platform/API/adapter/browser verification |
 
-Read `apps/web/AGENTS.md` and the installed Next documentation when changing web architecture. Keep server credentials out of web code; API authorization must protect each action, file and socket, not only visible navigation. New database features need parity contracts rather than SQL-only assumptions. External effects belong after transaction commit in durable work with idempotency controls.
+Read the installed Next.js documentation (`apps/web/node_modules/next/dist/docs/`) when changing web architecture; this Next.js version differs from older releases. Keep server credentials out of web code; API authorization must protect each action, file and socket, not only visible navigation. New database features need parity contracts rather than SQL-only assumptions. External effects belong after transaction commit in durable work with idempotency controls.
 
 New themes use the documented declarative format and scanned assets. Extending the trusted renderer or adding a new application-owned section requires a source change and review; a theme ZIP is not an executable plugin. Preserve the author's comment on main first-party files and preserve third-party licenses unchanged.
 
