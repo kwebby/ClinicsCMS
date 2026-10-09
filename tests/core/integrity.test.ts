@@ -304,3 +304,13 @@ describe('null clears optional fields on update',()=>{
   await expect(core.update('tasks',linked.id,{expectedVersion:1,patientId:null},manager)).rejects.toMatchObject({code:'IMMUTABLE'});
  });
 });
+
+describe('notification preferences',()=>{
+ test('are read back only by their owner',async()=>{
+  expect(await core.notificationPreferences(nurse)).toBeNull();
+  const saved={categories:['clinical','messages'],email:false,inApp:true,quietStart:'21:00',quietEnd:'07:00',timezone:'Europe/London'};
+  await core.execute('notifications.preferences',saved,nurse);
+  expect(await core.notificationPreferences(nurse)).toEqual(saved);
+  expect(await core.notificationPreferences(doctor)).toBeNull();
+ });
+});

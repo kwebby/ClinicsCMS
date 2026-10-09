@@ -21,10 +21,22 @@ export class Secrets {
   return Buffer.concat([d.update(data),d.final()]).toString('utf8');
  }
 }
+/** Fixed-window counters. INCR and the first EXPIRE run as one script, so a counter can never be left without a TTL. */
+const WINDOW_SCRIPT="local n=redis.call('INCR',KEYS[1]) if redis.call('PTTL',KEYS[1])<0 then redis.call('EXPIRE',KEYS[1],ARGV[1]) end return n";
 export class RateLimiter {
  constructor(private redis:Redis,private prefix='clinic:limits:'){}
- async take(key:string,limit=30,seconds=60){const k=this.prefix+digest(key);const n=await this.redis.incr(k);if(n===1)await this.redis.expire(k,seconds);if(n>limit)throw new DomainError('RATE_LIMIT','Too many requests. Please try again later.',429);}
+ private key(key:string){return this.prefix+digest(key);}
+ private unavailable():never{throw new DomainError('RATE_LIMIT_UNAVAILABLE','The service is temporarily unavailable. Please try again shortly.',503);}
+ /** Counts one event in the window and returns the new total. */
+ async hit(key:string,seconds=60):Promise<number>{try{return Number(await this.redis.eval(WINDOW_SCRIPT,1,this.key(key),seconds));}catch{return this.unavailable();}}
+ async count(key:string):Promise<number>{try{return Number(await this.redis.get(this.key(key))??0);}catch{return this.unavailable();}}
+ async take(key:string,limit=30,seconds=60){if(await this.hit(key,seconds)>limit)throw new DomainError('RATE_LIMIT','Too many requests. Please try again later.',429);}
+ /** Rejects once `limit` has been reached, without counting this call. */
+ async check(key:string,limit:number){if(await this.count(key)>=limit)throw new DomainError('RATE_LIMIT','Too many requests. Please try again later.',429);}
 }
+/** Single source for the documented defaults shared by the API and worker. */
+export const installationId=()=>process.env.INSTALLATION_ID||'clinic';
+export const organizationId=()=>process.env.ORGANIZATION_ID||'clinic';
 export function publicOrigin(){return (process.env.PUBLIC_URL??'http://localhost:3000').replace(/\/$/,'');}
 export function allowedOrigins(){return new Set((process.env.ALLOWED_ORIGINS??publicOrigin()).split(',').map(s=>s.trim()).filter(Boolean));}
 export function assertOrigin(req:Request){const origin=req.get('origin');if(!origin||!allowedOrigins().has(origin))throw new DomainError('ORIGIN','Request origin is not allowed',403);}

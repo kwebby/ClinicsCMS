@@ -2,7 +2,11 @@
 import { afterEach,beforeEach,describe,expect,it,vi } from 'vitest';
 import { MemoryDatabase } from '../../packages/persistence/src/memory.js';
 import { OutboxProcessor } from '../../apps/worker/src/processor.js';
-import { ClinicScheduler,hasReminderConsent } from '../../apps/worker/src/scheduler.js';
+import { ClinicScheduler,hasReminderConsent,keyedId } from '../../apps/worker/src/scheduler.js';
+import { OutboxDispatcher,failureInfo,retentionDays } from '../../apps/worker/src/outbox.js';
+import { MailDeliveryError } from '../../apps/api/src/integrations.js';
+import { listAll } from '../../apps/api/src/paging.js';
+import { createHash } from 'node:crypto';
 import { deliveryPreferences,nextDeliveryTime } from '../../apps/worker/src/preferences.js';
 import { entity } from '../../packages/platform/src/common.js';
 const now='2026-10-09T23:00:00.000Z';
@@ -59,5 +63,52 @@ describe('consented reminders and escalation',()=>{
   const rows=await db.list('outbox');const result=(await db.get('results','result'))!;await db.put('results',{...result,reviewState:'reviewed',contactState:'communicated',actionState:'not-required',version:2},1);
   const worker=new OutboxProcessor(db,providers() as any,redis() as any);for(const row of rows)await worker.process(row.id);expect(await db.list('notifications')).toHaveLength(1);
   await db.put('consents',entity('clinic',{patientId:'person',purpose:'reminders',granted:true},'yes'));vi.setSystemTime(new Date('2026-10-09T23:01:00Z'));await db.put('consents',entity('clinic',{patientId:'person',purpose:'reminders',granted:false},'no'));expect(await hasReminderConsent(db,'clinic','person')).toBe(false);
+ });
+});
+
+describe('outbox dispatch, retention and failure records',()=>{
+ it('enqueues only due work in bounded batches and continues from a cursor instead of failing on large backlogs',async()=>{
+  const db=new MemoryDatabase();for(let i=0;i<7;i++)await db.put('outbox',event(`due-${i}`,'lead.created',{}));
+  await db.put('outbox',event('future','lead.created',{},{nextAttemptAt:'2026-10-10T23:00:00.000Z'}));await db.put('outbox',event('leased','lead.created',{},{status:'processing',leaseUntil:'2026-10-09T23:30:00.000Z'}));await db.put('outbox',event('expired','lead.created',{},{status:'processing',leaseUntil:'2026-10-09T22:00:00.000Z'}));
+  for(let i=0;i<5;i++)await db.put('outbox',event(`done-${i}`,'lead.created',{},{status:'completed'}));
+  const queued:string[]=[],dispatcher=new OutboxDispatcher(db,'clinic',async id=>{queued.push(id);},{batch:3});const list=vi.spyOn(db,'list');
+  expect(await dispatcher.dispatch()).toBe(4);expect(list.mock.calls.every(([,query])=>['pending','processing'].includes(String(query?.eq?.status))&&Number(query?.limit)<=3)).toBe(true);
+  await dispatcher.dispatch();await dispatcher.dispatch();expect(new Set(queued)).toEqual(new Set([...Array.from({length:7},(_,i)=>`due-${i}`),'expired']));
+ });
+ it('prunes old completed and failed rows with their delivery records, keeping recent rows and live scheduler deduplication',async()=>{
+  const db=new MemoryDatabase(),old='2026-09-01T00:00:00.000Z';await taskAndStaff(db);
+  await db.put('outbox',event('old-done','email.send',{to:'staff@example.test'},{status:'completed',completedAt:old,updatedAt:old}));await db.put('mailDeliveries',entity('clinic',{status:'smtp-accepted',outboxId:'old-done'},'mail-old-done'));
+  await db.put('outbox',{...event('old-failed','lead.created',{},{status:'failed'}),updatedAt:old});await db.put('outbox',event('recent','lead.created',{},{status:'completed',completedAt:'2026-10-05T00:00:00.000Z'}));await db.put('outbox',event('pending','lead.created',{},{updatedAt:old}));
+  const scheduler=new ClinicScheduler(db,'clinic');expect((await scheduler.tick()).escalations).toBeGreaterThan(0);const scheduled=(await db.list('outbox')).filter(r=>r.type==='notification.requested');
+  for(const row of scheduled)await db.put('outbox',{...row,status:'completed',completedAt:old,version:row.version+1},row.version);
+  const dispatcher=new OutboxDispatcher(db,'clinic',async()=>{},{retentionDays:14});expect(await dispatcher.prune()).toBe(2);
+  expect((await db.list('outbox')).map(r=>r.id).sort()).toEqual(['pending','recent',...scheduled.map(r=>r.id)].sort());expect(await db.get('mailDeliveries','mail-old-done')).toBeNull();
+  expect((await scheduler.tick()).escalations).toBe(0);
+  const task=(await db.get('tasks','task'))!;await db.put('tasks',{...task,status:'completed',version:task.version+1},task.version);expect(await dispatcher.prune()).toBe(scheduled.length);
+  expect(retentionDays(undefined)).toBe(14);expect(retentionDays('30')).toBe(30);expect(retentionDays('0')).toBe(14);
+ });
+ it('retries mail that never reached the server and records only error names and codes',async()=>{
+  const db=new MemoryDatabase(),integration=providers();integration.sendMail.mockRejectedValueOnce(new MailDeliveryError('failed-before-send','ECONNECTION')).mockRejectedValueOnce(new MailDeliveryError('smtp-rejected','EMESSAGE'));
+  await db.put('outbox',event('email','email.send',{to:'staff@example.test',template:'verify-email',data:{url:'https://clinic.example/verify-email?token=synthetic'}}));const worker=new OutboxProcessor(db,integration as any,redis() as any);
+  await expect(worker.process('email')).rejects.toBeInstanceOf(MailDeliveryError);expect(await db.get('mailDeliveries','mail-email')).toMatchObject({status:'failed-before-send',smtpCode:'ECONNECTION'});expect(await db.get('outbox','email')).toMatchObject({status:'pending',lastErrorType:'MailDeliveryError',failureCode:'ECONNECTION'});
+  vi.setSystemTime(new Date('2026-10-10T00:00:00Z'));await expect(worker.process('email')).rejects.toBeInstanceOf(MailDeliveryError);expect((await db.get('mailDeliveries','mail-email'))?.status).toBe('smtp-rejected');
+  vi.setSystemTime(new Date('2026-10-10T02:00:00Z'));await worker.process('email');expect(integration.sendMail).toHaveBeenCalledTimes(3);expect((await db.get('mailDeliveries','mail-email'))?.status).toBe('smtp-accepted');expect((await db.get('outbox','email'))?.status).toBe('completed');
+  expect(failureInfo(Object.assign(new Error('to patient@example.test refused'),{code:'EENVELOPE'}))).toEqual({errorType:'Error',failureCode:'EENVELOPE'});expect(JSON.stringify(failureInfo(new Error('patient@example.test')))).not.toContain('patient');
+ });
+});
+
+describe('bounded scheduling',()=>{
+ it('uses time-ordered deterministic ids and still honors rows written under the previous id scheme',async()=>{
+  expect(keyedId(1000,'a')).toBe(keyedId(1000,'a'));expect(keyedId(1000,'a')<keyedId(2000,'a')).toBe(true);expect(keyedId(1000,'a')).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
+  const db=new MemoryDatabase();await taskAndStaff(db);const task=(await db.get('tasks','task'))!;
+  const legacy=`scheduled-${createHash('sha256').update(JSON.stringify(['clinic','overdue-task',task.id,task.dueAt,task.assignedTo,'staff'])).digest('hex')}`;await db.put('outbox',event(legacy,'notification.requested',{userId:'staff'},{status:'completed'}));
+  expect((await new ClinicScheduler(db,'clinic').tick()).escalations).toBe(0);
+ });
+ it('reads only open work, a bounded slice per tick, covers the rest on later ticks, and loads users only when needed',async()=>{
+  const db=new MemoryDatabase();await db.put('users',user());for(const id of ['a','b','c'])await db.put('tasks',entity('clinic',{assignedTo:'staff',branchId:'main',category:'administrative',status:'open',dueAt:'2026-10-09T22:50:00Z'},id));
+  await db.put('tasks',entity('clinic',{assignedTo:'staff',branchId:'main',category:'administrative',status:'completed',dueAt:'2026-10-09T20:00:00Z'},'done'));
+  const list=vi.spyOn(db,'list'),scheduler=new ClinicScheduler(db,'clinic',2);expect((await scheduler.tick()).escalations).toBe(2);expect((await scheduler.tick()).escalations).toBe(1);expect((await scheduler.tick()).escalations).toBe(0);
+  expect(list.mock.calls.filter(([collection])=>collection==='tasks').every(([,query])=>['open','in-progress','blocked'].includes(String(query?.eq?.status)))).toBe(true);expect(list.mock.calls.some(([collection])=>collection==='users')).toBe(false);
+  expect(await listAll(db,'tasks',{organizationId:'clinic'},2)).toHaveLength(4);
  });
 });

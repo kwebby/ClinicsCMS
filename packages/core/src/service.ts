@@ -130,6 +130,8 @@ export class ClinicService {
   return;
  }
  async get(collection:Collection,id:string,actor:Actor):Promise<Row>{assert(isCollection(collection),'NOT_FOUND','Collection not found',404);return this.authorized(this.db,collection,id,actor);}
+ /** The caller's saved notification preferences, or null when none are saved. */
+ async notificationPreferences(actor:Actor):Promise<Data|null>{const row=await this.db.get<Row>('preferences',`notification-${actor.id}`);return row&&row.organizationId===actor.organizationId&&row.userId===actor.id?clean(row.value??null):null;}
  async dashboard(actor:Actor):Promise<Data>{
   const relevant:Collection[]=patientOnly(actor)?['appointments','invoices','results','messages','notifications']:['patients','appointments','tasks','leads','invoices','results','notifications'];
   // Newest records first (ids are time-ordered), so current work is inside the 500-record window.
