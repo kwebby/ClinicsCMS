@@ -1,6 +1,5 @@
 /* Author: ramanpal singh | URL: https://kwebby.com */
 import { request } from 'node:http';
-import { chromium } from '@playwright/test';
 import { Decimal } from 'decimal.js';
 import { z } from 'zod';
 import { assert } from '../../contracts/src/index.js';
@@ -45,6 +44,8 @@ export function renderFinancialHtml(document:FinancialDocument,template:Financia
 }
 export async function renderFinancialPdfLocal(document:FinancialDocument,template:FinancialTemplate={}):Promise<Buffer> {
  const html=renderFinancialHtml(document,template);assert(Buffer.byteLength(html)<=1024*1024,'DOCUMENT_SIZE','Document exceeds render budget');
+ // Loaded on first local render only: the API/worker never load the browser driver at startup.
+ const {chromium}=await import('playwright-core');
  const browser=await chromium.launch({headless:true,chromiumSandbox:process.env.PDF_CHROMIUM_SANDBOX!=='false',args:['--disable-dev-shm-usage','--disable-background-networking']});
  try {const context=await browser.newContext({javaScriptEnabled:false,serviceWorkers:'block'});await context.route('**/*',route=>route.abort());const page=await context.newPage();await page.setContent(html,{waitUntil:'domcontentloaded',timeout:15000});return await page.pdf({format:'A4',printBackground:true,preferCSSPageSize:true});}
  finally{await browser.close();}

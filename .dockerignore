@@ -1,6 +1,5 @@
-.env*
-.runtime
-node_modules
+**/.env*
+**/.runtime
 **/node_modules
 **/.next
 dist
@@ -8,6 +7,15 @@ dist
 coverage
 playwright-report
 test-results
+artifacts
 *.tsbuildinfo
+**/*.tsbuildinfo
+**/*.pem
+**/*.key
+**/*.p12
+**/*.pfx
+**/*.jks
+**/secrets
+**/certificates
 deploy/certificates
 deploy/secrets

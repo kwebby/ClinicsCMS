@@ -5,7 +5,7 @@ import { dirname, join, relative, resolve, sep } from 'node:path';
 import type { Readable } from 'node:stream';
 import yazl from 'yazl';
 import { privateRead } from '../packages/platform/src/files.js';
-import { THEME_LIMITS, validateThemeZip } from '../packages/platform/src/themes.js';
+import { THEME_LIMITS, THEME_PATHS, isThemeDirectoryPath, isThemeFilePath, validateThemeZip } from '../packages/platform/src/themes.js';
 
 const usage = `ClinicsCMS theme packaging
 
@@ -25,15 +25,15 @@ async function sourceFiles(root: string): Promise<Map<string, Buffer>> {
   for (const name of (await readdir(directory)).sort()) {
    const entry = prefix ? `${prefix}/${name}` : name;
    if (++entries > THEME_LIMITS.entries) throw new Error('Theme source exceeds the 1,000-entry limit.');
-   if (entry.length > 200) throw new Error('Theme source contains a path longer than 200 characters.');
+   if (entry.length > THEME_PATHS.maxLength) throw new Error(`Theme source contains a path longer than ${THEME_PATHS.maxLength} characters.`);
    const path = join(directory, name), info = await lstat(path);
    if (info.isSymbolicLink()) throw new Error(`Symbolic links are forbidden: ${entry}`);
    if (info.isDirectory()) {
-    if (!/^assets(?:\/[A-Za-z0-9_-]+)*$/.test(entry)) throw new Error(`Unsupported directory: ${entry}. Use only assets/ and its safe subdirectories.`);
+    if (!isThemeDirectoryPath(entry)) throw new Error(`Unsupported directory: ${entry}. Use only assets/ and its safe subdirectories.`);
     await visit(path, entry);
    } else {
     if (!info.isFile()) throw new Error(`Only regular files are supported: ${entry}`);
-    if (entry !== 'theme.json' && !/^assets\/[A-Za-z0-9_/-]+\.(png|jpg|jpeg|webp|woff2)$/.test(entry)) throw new Error(`Unsupported file: ${entry}`);
+    if (!isThemeFilePath(entry)) throw new Error(`Unsupported file: ${entry}`);
     if (info.size > THEME_LIMITS.fileBytes) throw new Error(`Theme file exceeds 20 MiB: ${entry}`);
     const bytes = await privateRead(path);
     if (bytes.length > THEME_LIMITS.fileBytes) throw new Error(`Theme file exceeds 20 MiB: ${entry}`);

@@ -3,7 +3,7 @@
 
 For starter projects, packaging commands, customization boundaries, and a complete walkthrough, see [theme development](../THEME-DEVELOPMENT.md). This reference describes the validator contract; accepted layout keys and block variants do not imply that every renderer consumes every field.
 
-A ZIP contains one root `theme.json` and optional `assets/` PNG, JPEG, WebP or WOFF2 files. Themes are data, rendered by application-owned components. Scripts, arbitrary HTML/CSS, URLs to external resources, nested/encrypted archives, path traversal, symlinks, duplicate entries and unsupported files are rejected. Limits: 25 MiB ZIP, 100 MiB expanded, 1,000 entries, 20 MiB per entry, 100:1 maximum expansion ratio. Images are signature-checked, decoded and limited to 40 megapixels. A working malware scanner is mandatory.
+A ZIP contains one root `theme.json` and optional `assets/` PNG, JPEG, WebP or WOFF2 files. Themes are data, rendered by application-owned components. Scripts, arbitrary HTML/CSS, URLs to external resources, nested/encrypted archives, path traversal, symlinks, duplicate entries and unsupported files are rejected. Limits: 25 MiB ZIP, 100 MiB expanded, 1,000 entries, 20 MiB per entry, 100:1 maximum expansion ratio. Images are signature-checked, decoded, limited to one frame and 40 megapixels, and re-encoded in the same format so metadata (EXIF/GPS) and appended payloads never become public. WOFF2 headers are validated (flavor, declared length equal to file size, table count, reserved field, block bounds). A working malware scanner is mandatory.
 
 Minimal example (all supported page-layout keys are explicit):
 

@@ -19,6 +19,13 @@ jobs:
   application:
     runs-on: ubuntu-24.04
     timeout-minutes: 25
+    services:
+      # Same pinned image as deploy/compose.yml; enables the Redis-backed HTTP authentication suite.
+      valkey:
+        image: valkey/valkey:8.1.10-alpine@sha256:081c2f5cb575efc901aa80ff9cdbd1ec6a301682fd35e1ebb4b0990a4a4a8507
+        ports:
+          - 6379:6379
+        options: --health-cmd="valkey-cli ping" --health-interval=5s --health-timeout=3s --health-retries=30
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
         with: {fetch-depth: 0}
@@ -29,6 +36,8 @@ jobs:
       - run: pnpm typecheck
       - run: pnpm deploy:verify
       - run: pnpm test
+        env:
+          REDIS_TEST_URL: redis://127.0.0.1:6379
       - run: pnpm build
         env:
           API_INTERNAL_URL: http://127.0.0.1:4000
@@ -51,19 +60,39 @@ jobs:
           command -v trivy
       - run: gitleaks git --redact --no-banner .
       - run: trivy fs --scanners vuln,secret,misconfig --severity HIGH,CRITICAL --exit-code 1 --skip-dirs node_modules,.runtime .
-      - name: Build and scan application container
+  container-images:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        target: [application, web, pdf]
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+      - name: Install checksum-verified Trivy
         run: |
-          docker build -f deploy/Dockerfile --target application -t clinicscms:ci .
-          trivy image --format cyclonedx --output application-sbom.json clinicscms:ci
-          trivy image --severity HIGH,CRITICAL --format json --output container-vulnerabilities.json clinicscms:ci
-          trivy image --severity HIGH,CRITICAL --exit-code 1 clinicscms:ci
+          set -eu
+          curl --fail --location --retry 3 -o /tmp/trivy.tar.gz https://github.com/aquasecurity/trivy/releases/download/v0.75.0/trivy_0.75.0_Linux-64bit.tar.gz
+          echo 'c6e65abddb348e25f10549df887045629cf28cc72453cd1c63acb717316b3f3f  /tmp/trivy.tar.gz' | sha256sum --check
+          tar -xzf /tmp/trivy.tar.gz -C /tmp trivy
+          sudo install /tmp/trivy /usr/local/bin/trivy
+          command -v trivy
+      - name: Build and scan the ${{ matrix.target }} runtime image
+        env:
+          TARGET: ${{ matrix.target }}
+        run: |
+          set -eu
+          docker build -f deploy/Dockerfile --target "$TARGET" -t "clinicscms-$TARGET:ci" .
+          trivy image --format cyclonedx --output "$TARGET-sbom.json" "clinicscms-$TARGET:ci"
+          trivy image --severity HIGH,CRITICAL --format json --output "$TARGET-vulnerabilities.json" "clinicscms-$TARGET:ci"
+          trivy image --severity HIGH,CRITICAL --exit-code 1 "clinicscms-$TARGET:ci"
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
-        if: always() && hashFiles('application-sbom.json') != ''
+        if: always() && hashFiles(format('{0}-sbom.json', matrix.target)) != ''
         with:
-          name: container-security-reports
+          name: container-security-reports-${{ matrix.target }}
           path: |
-            application-sbom.json
-            container-vulnerabilities.json
+            ${{ matrix.target }}-sbom.json
+            ${{ matrix.target }}-vulnerabilities.json
           if-no-files-found: error
   sql-contracts:
     runs-on: ubuntu-24.04

@@ -49,7 +49,8 @@ x-app: &app
 services:
   api:
     <<: *app
-    networks: [frontend, backend, egress]
+    # Only the API scans uploads; `scanner` is internal and shared with ClamAV alone.
+    networks: [frontend, backend, egress, scanner]
     command: [node, dist/apps/api/src/main.js]
     depends_on:
       valkey: {condition: service_healthy}
@@ -134,8 +135,17 @@ services:
   clamav:
     image: clamav/clamav:1.5.4-debian@sha256:9bb8712a50f0e75166e936c452cd82dd5e5be0b85586598930b5bbb84a99a578
     restart: unless-stopped
+    # The image's unprivileged entrypoint runs freshclam and clamd directly as its clamav user (UID 1000), so no capability is needed.
+    user: clamav
+    entrypoint: [/init-unprivileged]
     volumes: [clamav:/var/lib/clamav]
-    networks: [backend, egress]
+    read_only: true
+    # clamd's local socket, stream and archive temporaries use /tmp; log files are duplicated to stdout.
+    tmpfs: [/tmp:size=512m, /var/log/clamav:size=16m]
+    security_opt: [no-new-privileges:true]
+    cap_drop: [ALL]
+    # scanner reaches only the API; scanner-egress is used solely by freshclam signature updates.
+    networks: [scanner, scanner-egress]
     mem_limit: 2g
   postgres:
     profiles: [postgres]
@@ -146,8 +156,11 @@ services:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: ${POSTGRES_ADMIN_PASSWORD:-}
       APP_DATABASE_PASSWORD: ${DATABASE_PASSWORD:-}
-    command: [postgres, -c, wal_level=replica, -c, archive_mode=on, -c, "archive_command=test ! -f /var/lib/postgresql/data/wal-archive/%f && cp %p /var/lib/postgresql/data/wal-archive/%f", -c, archive_timeout=900]
-    volumes: [postgres:/var/lib/postgresql/data, ./postgres/init-wal.sh:/docker-entrypoint-initdb.d/001-wal.sh:ro, ./postgres/init-app.sh:/docker-entrypoint-initdb.d/002-app.sh:ro]
+    # WAL is archived to its own volume (prune with clinic-wal-retention; see docs/security/RECOVERY.md). The wrapper only gives the
+    # postgres role ownership of that mount point before the official entrypoint drops privileges.
+    entrypoint: [sh, -ec, 'mkdir -p /wal-archive && chown postgres:postgres /wal-archive && chmod 700 /wal-archive && exec docker-entrypoint.sh "$$@"', clinic-postgres]
+    command: [postgres, -c, wal_level=replica, -c, archive_mode=on, -c, "archive_command=test ! -f /wal-archive/%f && cp %p /wal-archive/%f", -c, archive_timeout=900]
+    volumes: [postgres:/var/lib/postgresql/data, postgres-wal:/wal-archive, ./postgres/init-app.sh:/docker-entrypoint-initdb.d/002-app.sh:ro, ./postgres/wal-retention.sh:/usr/local/bin/clinic-wal-retention:ro]
     networks: [backend]
     healthcheck: {test: [CMD-SHELL, 'pg_isready -U clinic -d clinic'], interval: 10s, timeout: 3s, retries: 10}
   mysql:
@@ -186,7 +199,9 @@ services:
 networks:
   frontend: {internal: true}
   backend: {internal: true}
+  scanner: {internal: true}
   egress: {}
+  scanner-egress: {}
   analyzer-egress:
     enable_ipv6: false
     ipam:
@@ -198,4 +213,5 @@ volumes:
   valkey: {}
   clamav: {}
   postgres: {}
+  postgres-wal: {}
   mysql: {}

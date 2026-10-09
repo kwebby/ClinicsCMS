@@ -16,7 +16,7 @@ ClinicsCMS provides implementation and automated checks; it is not a compliance 
 | Content/search/accessibility | BlockNote round trips/conflicts, SSR metadata/structured data/social cards, sitemap/private exclusions, keyboard/screen-reader workflows | Browser tests and manual accessibility review |
 | Capacity/recovery | Defined workload and response/error targets; paired backup restore within measured one-hour RPO with zero missing files | Load reports and clean-host recovery drill |
 | Security release review | Dependency/container/secret/static scans; ASVS mapping; no unresolved Critical/High or clinical/payroll/financial integrity exposure | CI artifacts and tracked remediations |
-| Independent penetration test | External testers, scoped deployed build/infra, written findings, remediation and retest | External engagement report; cannot be replaced by the implementation agent |
+| Independent penetration test | External testers, scoped deployed build/infra, written findings, remediation and retest | External engagement report; cannot be replaced by the project's own automated checks |
 | Clinical/operations approval | Doctor, reception, finance/HR workflow acceptance, country localization validation, staff training | Clinic acceptance record |
 
 ## Evidence from a fresh clone
@@ -42,6 +42,6 @@ Train reception on registration identity, walk-ins, rescheduling and callbacks; 
 
 ## Delivered CI gates
 
-`.github/workflows/ci.yml` pins Node and GitHub actions and runs lockfile installation, typechecking, regression tests, application build, production dependency audit, a license allowlist, checksum-verified Gitleaks and Trivy, application-image build/scan, and an SBOM artifact. Missing scanner binaries, unapproved licenses, and High/Critical scan findings fail their steps. Separate service jobs run the contract suite against PostgreSQL 17/18 and MySQL 8.4. Manual jobs require a dedicated protected `disposable-certification` environment and explicit Supabase/real-Firestore secrets; they never silently substitute the emulator or an in-memory result for a remote-backend run.
+`.github/workflows/ci.yml` pins Node and GitHub actions and runs lockfile installation, typechecking, regression tests (including the Redis-backed HTTP authentication suite against a pinned Valkey service), application build, production dependency audit, a license allowlist, checksum-verified Gitleaks and Trivy, and a build/scan matrix for the application, web and PDF runtime images with an SBOM and vulnerability report artifact per image. Missing scanner binaries, unapproved licenses, and High/Critical scan findings fail their steps. Separate service jobs run the contract suite against PostgreSQL 17/18 and MySQL 8.4. Manual jobs require a dedicated protected `disposable-certification` environment and explicit Supabase/real-Firestore secrets; they never silently substitute the emulator or an in-memory result for a remote-backend run.
 
 Creating this workflow is not evidence that it has run. Linux host/proxy deployment, real remote-database certification, production provider checks, recovery timing, clinical acceptance and independent penetration testing remain separate evidence gates. Retain package/image license notices and satisfy any applicable source/redistribution obligations; the license allowlist is a review gate, not legal clearance.

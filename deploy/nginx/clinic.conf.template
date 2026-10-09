@@ -27,6 +27,11 @@ server {
     proxy_pass http://api:4000;
     proxy_buffering off;
     proxy_read_timeout 70s;
+    # Any add_header here replaces every inherited one, so the server-level security headers are repeated.
+    add_header Strict-Transport-Security "max-age=31536000" always;
+    add_header X-Content-Type-Options nosniff always;
+    add_header Referrer-Policy strict-origin-when-cross-origin always;
+    add_header X-Frame-Options DENY always;
     add_header Cache-Control "private, no-store" always;
   }
   location /socket.io/ {

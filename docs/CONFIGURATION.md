@@ -15,11 +15,11 @@ The API and outbox worker load `.env` from their working directory through doten
 | `CLINIC_DOMAIN` | Lowercase fully-qualified hostname without scheme/port/path. Used by both proxy templates. |
 | `API_HOST` / `API_PORT` | Native defaults `127.0.0.1` / `4000`; Compose binds `0.0.0.0:4000` only on its private networks. |
 | `API_INTERNAL_URL` | Server-to-server API URL. Native `http://127.0.0.1:4000`; Compose `http://api:4000`. Next rewrites are generated at build time, so changing routing can require rebuilding the web app. |
-| `TRUST_PROXY_HOPS` | Native `0`; Compose `1` for the supplied single proxy. Match the real topology rather than trusting arbitrary forwarded headers. |
+| `TRUST_PROXY_HOPS` | Number of trusted reverse proxies in front of the API. Use `0` only when clients reach the API directly (local development). Set `1` behind exactly one proxy: the supplied Compose proxy (preset) **or a host-level Nginx/Apache in front of a native install**. With `0` behind a proxy every client appears as the proxy's address and shares one rate-limit bucket. Add hops only for further proxies/CDNs you control; never trust arbitrary forwarded headers. |
 | `APP_ENCRYPTION_KEY` | Exactly 32 cryptographically random bytes encoded as base64. Encrypts provider and MFA secrets. Preserve it in the recovery secret store; replacing it makes existing ciphertext unreadable. |
 | `BOOTSTRAP_TOKEN` | One-time setup secret; generator uses 32 random bytes as 64 hex characters. Clear after owner setup and recreate API/worker. |
 | `ORGANIZATION_ID` | Durable clinic organization identifier, default `clinic`. Keep stable after records exist. |
-| `INSTALLATION_ID` | Queue/session/event namespace, default `clinic` in generated configuration. Keep stable and unique when infrastructure is shared. |
+| `INSTALLATION_ID` | Queue/session/event namespace, default `clinic`. Keep stable and unique when infrastructure is shared. |
 | `INSTALLATION_AUDIENCE` | `patient` for clinic tools; `business` for a separate vendor/B2B installation. B2B and patient data should use separate deployments/datastores. |
 | `REGISTRATION_ENABLED` | `false` disables public patient signup; default `true`. Public signup never grants staff roles. |
 | `REQUIRE_STAFF_MFA` | Keep `true`; production Compose enforces it. `false` is for isolated fictional development only. |
@@ -54,12 +54,19 @@ Database initialization scripts run only for fresh container volumes. Editing a 
 | `PRIVATE_STORAGE_ROOT` | Native default `.runtime/files`; Compose `/data` from the private named volume. API/worker need access; web/proxy must not mount it. |
 | `CLAMD_CONFIG` | Optional native path to `clamdscan` client configuration. Compose uses `/etc/clamav/clamd.conf`, pointing to `clamav:3310`. |
 | `OUTBOUND_WORKERS_ENABLED` | Explicit `true` starts outbox delivery/scheduled work; generated default `false`. Recreate/restart the worker after changing it. |
+| `OUTBOX_RETENTION_DAYS` | Days completed and permanently failed background jobs (and their email delivery records) stay visible in the admin jobs view before the worker deletes them, default `14`. Reminder/escalation rows are kept while their appointment, task or result is still outstanding. |
 | `PDF_RENDERER_SOCKET` | Production Unix socket, set to `/run/clinic-pdf/renderer.sock` in Compose. Native development can leave blank for local Chromium rendering. |
-| `PDF_CHROMIUM_SANDBOX` | Default Chromium sandbox enabled. Supplied isolated PDF container sets `false` because it has no network, app secrets or clinic-file mount and is otherwise restricted. Do not copy this setting into a general-purpose host renderer. |
+| `PDF_CHROMIUM_SANDBOX` | Default Chromium sandbox enabled (`true`). Supplied isolated PDF container sets `false` because it has no network, app secrets or clinic-file mount and is otherwise restricted. Do not copy this setting into a general-purpose host renderer. |
+| `PDF_RENDER_QUEUE_SIZE` | PDF worker only: requests that may wait while the single Chromium render runs, default `4` (`0`–`32`). Further requests get `503` immediately. An invalid value stops the worker at startup. |
+| `PDF_RENDER_QUEUE_TIMEOUT_MS` | PDF worker only: longest wait for the render slot, default `10000` (`100`–`30000`), then `503`. Keep queue wait plus render time below the API's 35-second renderer timeout. |
 | `ANALYZER_SOCKET` | Production Unix socket `/run/clinic-analyzer/analyzer.sock`; blank enables the local development implementation. |
-| `ANALYZER_SUBNET` | Optional Docker IPv4 subnet, default `172.30.240.0/28`; must match the host analyzer firewall policy. |
+| `ANALYZER_SUBNET` | Optional Docker IPv4 subnet, default `172.30.240.0/28`; must match the host analyzer firewall policy (forwarded and host-bound `INPUT` rules). |
+| `ANALYZER_DNS_SERVERS` | Host firewall installer only (`deploy/analyzer-firewall.sh`): comma/space-separated IPv4 resolvers the analyzer's DNS may reach on port 53. Blank uses the host's non-loopback nameservers (the systemd-resolved upstreams when the stub resolver is active), which is what Docker's embedded DNS forwards to. Set it explicitly when Docker uses other resolvers. |
 | `AI_ALLOWED_HOSTS` | Comma-separated exact hostnames allowed for configured HTTPS AI endpoints, default `api.openai.com`. Set no spaces; this is not an API key. |
 | `DATA_TRANSFER_KEY` | Distinct base64 32-byte key used privately for offline encrypted export/import. Not passed to routine application containers. |
+| `TRANSFER_SCRATCH_DIR` | Private working directory for decrypted import data (mode `0700`). Defaults to the directory containing `PRIVATE_STORAGE_ROOT` and must be outside it. Set it explicitly when that parent is not a private, writable location. |
+| `TRANSFER_MAX_EXPANDED_BYTES` | Upper bound for the decompressed import stream. Default: 32 times the encrypted archive size, at least 2 GiB. |
+| `WAL_ARCHIVE_DIR` | `clinic-wal-retention` only, inside the PostgreSQL container: archive directory, default `/wal-archive` (the `postgres-wal` volume). See [recovery](security/RECOVERY.md). |
 | `COMPOSE_PROFILES` | Exactly one `nginx`/`apache`, plus `postgres`/`mysql` only for a local database. Generator sets it. |
 | `APP_VERSION` | Optional tag for locally built application images, default `0.1.0`. It does not fetch a released image or alter application code. |
 | `PORT` / `HOSTNAME` | Standalone Next server binding; Compose uses `3000` / `0.0.0.0`. Use loopback for a native process behind a host proxy. |

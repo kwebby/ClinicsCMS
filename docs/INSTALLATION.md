@@ -93,7 +93,9 @@ The default analyzer subnet is `172.30.240.0/28`. If it conflicts, set `ANALYZER
 sudo env ANALYZER_SUBNET=172.30.241.0/28 sh deploy/analyzer-firewall.sh
 ```
 
-The script requires Docker's `DOCKER-USER` chain and manages a dedicated `CLINIC_ANALYZER` chain. Make its rules persistent after Docker startup through your host firewall manager. A different firewall backend needs an equivalent tested policy. The [deployment guide](../deploy/README.md#files-scanner-pdf-and-analyzer) explains the boundary; this step is not a general firewall installer.
+The analyzer resolves names through Docker's embedded DNS, which forwards queries from the analyzer's own network namespace, so the policy allows UDP/TCP 53 only to the resolvers in `ANALYZER_DNS_SERVERS` (blank: the host's non-loopback nameservers, the same ones Docker forwards to; the script prints the list it used). Set it explicitly if Docker is configured with other resolvers, for example `sudo env ANALYZER_DNS_SERVERS=10.0.0.2 sh deploy/analyzer-firewall.sh`. Everything else except public TCP 80/443 is rejected, and traffic from the analyzer subnet addressed to the host itself (gateway, host or published addresses, which uses the `INPUT` chain rather than forwarding) is rejected apart from DNS to a configured host resolver.
+
+The script requires Docker's `DOCKER-USER` chain and manages dedicated `CLINIC_ANALYZER` and `CLINIC_ANALYZER_INPUT` chains. Make its rules persistent after Docker startup through your host firewall manager. A different firewall backend needs an equivalent tested policy. The [deployment guide](../deploy/README.md#files-scanner-pdf-and-analyzer) explains the boundary; this step is not a general firewall installer.
 
 ## 6. Validate, build, and start
 
@@ -136,6 +138,10 @@ Full preflight validates certificate matching/expiry and Compose configuration. 
 Setup works only while the user store is empty. It is not an owner-password reset tool. For a development demonstration, use the separate [development guide](DEVELOPMENT.md); do not seed fictional owner accounts into a production installation.
 
 ## Database and proxy alternatives
+
+### Native processes behind a host reverse proxy
+
+If you run the API natively (or publish it to loopback through your own Compose override) behind a host-level Nginx/Apache, set `TRUST_PROXY_HOPS=1` in that API environment and bind the API to loopback. Leaving it at `0` makes every client appear as the proxy's address, so all visitors share the same per-address rate limits (login, booking, registration, tools): a handful of requests can lock everyone out. Use `0` only when browsers reach the API directly, as in local development; see the [configuration reference](CONFIGURATION.md).
 
 Choose one authoritative backend when generating a **new** configuration. Do not rerun `deploy:init` over an existing installation to switch databases; use [controlled data transfer](DATA-TRANSFER.md).
 
@@ -183,4 +189,4 @@ The shipped client rules deny direct browser database access. The Admin SDK uses
 
 ## Continuing operation
 
-Read [deployment operations](../deploy/README.md) for service boundaries, proxy behavior, certificate renewal, updates, and troubleshooting. Set up [paired database/file backups and restore exercises](security/RECOVERY.md) before clinic use. Database backups alone do not contain local attachments, themes, or encryption keys. Theme development and packaging are documented in the [theme format](security/THEME-FORMAT.md); the current publication and rollback behavior is described in [website settings](WEBSITE-SETTINGS.md).
+Read [deployment operations](../deploy/README.md) for service boundaries, proxy behavior, certificate renewal, updates, and troubleshooting. Set up [paired database/file backups and restore exercises](security/RECOVERY.md) before clinic use. The PostgreSQL profile archives WAL to its own `postgres-wal` volume; nothing deletes archived WAL automatically, so schedule base backups and the `clinic-wal-retention` pruning described there, and monitor that volume's free space. Database backups alone do not contain local attachments, themes, or encryption keys. Theme development and packaging are documented in the [theme format](security/THEME-FORMAT.md); the current publication and rollback behavior is described in [website settings](WEBSITE-SETTINGS.md).

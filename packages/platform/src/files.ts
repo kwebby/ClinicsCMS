@@ -14,7 +14,8 @@ export class ClamAvScanner implements MalwareScanner {
  constructor(private readonly command = 'clamdscan') {}
  async scan(path: string) {
   try { await promisify(execFile)(this.command, [...(process.env.CLAMD_CONFIG ? ['--config-file', process.env.CLAMD_CONFIG] : []), '--stream', '--no-summary', path], {timeout: 30_000, maxBuffer: 16_384, windowsHide: true}); }
-  catch { assert(false, 'FILE_SCAN_FAILED', 'The file could not pass the malware scanner', 422); }
+  // clamdscan exits 1 only when a signature matched; any other failure (daemon down, timeout, missing client) still fails closed but is not a malware verdict.
+  catch (error) { if ((error as {code?: unknown})?.code === 1) assert(false, 'FILE_SCAN_FAILED', 'The file could not pass the malware scanner', 422); assert(false, 'SCANNER_UNAVAILABLE', 'Malware scanning is temporarily unavailable; try again later', 503); }
  }
 }
 export async function scanBuffer(bytes: Buffer, scanner: MalwareScanner): Promise<void> {
@@ -29,8 +30,15 @@ export function detectMime(bytes: Buffer): string | null {
  if (bytes[0]===255 && bytes[1]===216 && bytes[2]===255) return 'image/jpeg';
  if (bytes.subarray(0,4).toString()==='RIFF' && bytes.subarray(8,12).toString()==='WEBP') return 'image/webp';
  if (bytes.subarray(0,5).toString()==='%PDF-') return 'application/pdf';
- if (bytes.subarray(0,4).toString()==='wOF2') return 'font/woff2';
+ if (bytes.subarray(0,4).toString()==='wOF2') return validWoff2Header(bytes) ? 'font/woff2' : null;
  return null;
+}
+/** WOFF2 table header: declared length must equal the file, flavor must be a font, reserved must be zero and every block must fit. */
+export function validWoff2Header(bytes: Buffer): boolean {
+ if (bytes.length < 48 || bytes.readUInt32BE(0) !== 0x774f4632) return false;
+ const flavor = bytes.readUInt32BE(4), numTables = bytes.readUInt16BE(12), compressed = bytes.readUInt32BE(20);
+ const within = (offset: number, length: number) => offset === 0 && length === 0 || offset >= 48 && offset + length <= bytes.length;
+ return [0x00010000, 0x4f54544f, 0x74746366, 0x74727565].includes(flavor) && bytes.readUInt32BE(8) === bytes.length && numTables >= 1 && numTables <= 512 && bytes.readUInt16BE(14) === 0 && compressed > 0 && 48 + compressed <= bytes.length && within(bytes.readUInt32BE(28), bytes.readUInt32BE(32)) && within(bytes.readUInt32BE(40), bytes.readUInt32BE(44));
 }
 export type FileScope = 'clinical' | 'conversation' | 'personal' | 'payroll';
 interface StorageOptions { root: string; scanner?: MalwareScanner; maxBytes?: number; }
@@ -51,6 +59,14 @@ export class LocalFileStorage {
    assert(actor.patientIds.includes(input.patientId!) || (staff && (!patient.branchId || actor.roles.includes('owner') || actor.roles.includes('admin') || actor.branchIds.includes(String(patient.branchId)))), 'FORBIDDEN', 'Patient access denied',403);
   }
   if (scope==='payroll') assert(actor.roles.some(role => ['owner','admin','hr'].includes(role)), 'FORBIDDEN', 'Payroll upload denied',403);
+  // Release/attachment checks downstream trust file.patientId, so a non-clinical link must be within the uploader's own patient scope.
+  if (scope!=='clinical' && input.patientId!==undefined) {
+   assert(scope==='conversation', 'FILE_SCOPE', 'Only clinical or conversation files can reference a patient');
+   const patient = await this.db.get('patients', input.patientId);
+   assert(patient && patient.organizationId===actor.organizationId, 'NOT_FOUND', 'Patient not found',404);
+   const staff = actor.roles.some(role => role!=='patient');
+   assert(actor.patientIds.includes(input.patientId) || (staff && (!patient.branchId || actor.roles.includes('owner') || actor.roles.includes('admin') || actor.branchIds.includes(String(patient.branchId)))), 'FORBIDDEN', 'Patient access denied',403);
+  }
   const mime = detectMime(input.bytes);
   assert(mime && ['image/jpeg','image/png','image/webp','application/pdf'].includes(mime) && input.mime===mime, 'FILE_TYPE', 'File content does not match a supported document or image');
   await scanBuffer(input.bytes, this.scanner);

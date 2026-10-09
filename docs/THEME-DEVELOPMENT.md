@@ -168,9 +168,9 @@ Website settings navigation is deliberately richer and allows validated HTTPS, l
 
 ## Images, fonts and licensing
 
-Accepted raster formats are PNG, JPEG and WebP. The server checks file signatures, parses image metadata and rejects images above 40 million pixels. Keep actual dimensions and file sizes reasonable for mobile delivery; avoid embedding patient information or metadata in distributed images. ZIP theme images are validated but are **not** re-encoded through the public-image upload pipeline, so strip private metadata before packaging.
+Accepted raster formats are PNG, JPEG and WebP. The server checks file signatures, decodes each image, rejects multi-frame images and images above 40 million pixels, and re-encodes it in the same format before storing it. Re-encoding removes EXIF/GPS and other metadata, colour-profile chunks and any bytes appended after the image, and applies EXIF orientation; JPEG and WebP are re-compressed at quality 90, so exported theme assets are the re-encoded files rather than your originals. Keep actual dimensions and file sizes reasonable for mobile delivery, and still avoid placing patient information in the visible image.
 
-WOFF2 files are permitted as assets and signature-checked, but ZIP v1 has no font-family mapping and does not automatically create `@font-face` rules. Including a font file alone will not make it selectable or active. Use the built-in locally hosted Google Fonts library in Branding. Its nine curated families include their OFL notices, source URLs and hashes in [`apps/web/public/fonts`](../apps/web/public/fonts/README.md).
+WOFF2 files are permitted as assets; their header is validated (signature, font flavor, declared length equal to the file size, table count, reserved field and block bounds), but ZIP v1 has no font-family mapping and does not automatically create `@font-face` rules. Including a font file alone will not make it selectable or active. Use the built-in locally hosted Google Fonts library in Branding. Its nine curated families include their OFL notices, source URLs and hashes in [`apps/web/public/fonts`](../apps/web/public/fonts/README.md).
 
 Keep asset rights separate from theme code rights. The `license` string does not automatically grant permission to use a photo, a clinic logo or a commercial typeface. The supplied example illustration is original and MIT-licensed with this repository. Uploaded ZIPs cannot contain `.txt` license files under the current allowlist; distribute full license and attribution documents alongside your ZIP or in its source repository. Do not package third-party assets if their terms cannot be satisfied by your distribution.
 
@@ -288,7 +288,7 @@ Use the existing pattern of a shared schema and trusted renderer for custom inne
 | `THEME_FILE` / unsupported file | Only root `theme.json` and supported assets; no parent folder, hidden OS files or license text inside ZIP |
 | `THEME_PATH` | Safe ASCII path, no traversal/backslash/extra dots in basenames |
 | `THEME_ASSET` | Referenced file exists with exact case; file signature matches extension |
-| `THEME_IMAGE` | Valid decodable PNG/JPEG/WebP and pixel budget respected |
+| `THEME_IMAGE` | Valid decodable single-frame PNG/JPEG/WebP, pixel budget respected, and still within 20 MiB after re-encoding |
 | `THEME_BOMB` / `THEME_SIZE` | Optimize media, reduce entry count/expanded bytes, avoid extreme compression ratios |
 | `FILE_SCAN_FAILED` | ClamAV daemon/signatures/configuration reachable; inspect operational logs without exposing upload content |
 | `VERSION_CONFLICT` | Another publication changed; reload and review rather than retrying with a guessed ID |

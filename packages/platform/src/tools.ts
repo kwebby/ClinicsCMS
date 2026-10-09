@@ -3,7 +3,7 @@ import { lookup } from 'node:dns/promises';
 import { isIP } from 'node:net';
 import { request as httpsRequest } from 'node:https';
 import { request as httpRequest } from 'node:http';
-import { assert } from '../../contracts/src/index.js';
+import { DomainError, assert } from '../../contracts/src/index.js';
 import { z } from 'zod';
 
 export type ToolAudience='patient'|'business';
@@ -67,35 +67,78 @@ export function runPublicTool(tool:string,input:unknown,context:{audience:ToolAu
  }
  return{tool,audience:context.audience,summary,items,values,clinicalAdvice:false,emailPolicy:{resultAvailableWithoutEmail:context.audience==='patient',detailedReportRequiresEmail:context.audience==='business',marketingConsentRequiredSeparately:true,marketingConsentDefault:false}};
 }
+/** IANA special-purpose, private and non-unicast IPv4 blocks; deploy/analyzer-firewall.sh rejects the same list. */
+export const RESTRICTED_IPV4_CIDRS=['0.0.0.0/8','10.0.0.0/8','100.64.0.0/10','127.0.0.0/8','169.254.0.0/16','172.16.0.0/12','192.0.0.0/24','192.0.2.0/24','192.88.99.0/24','192.168.0.0/16','198.18.0.0/15','198.51.100.0/24','203.0.113.0/24','224.0.0.0/4','240.0.0.0/4'] as const;
+const ipv4Number=(address:string)=>address.split('.').reduce((value,part)=>value*256+Number(part),0);
+const restrictedIpv4=RESTRICTED_IPV4_CIDRS.map(cidr=>{const [base,bits]=cidr.split('/');return [ipv4Number(base),2**(32-Number(bits))] as const;});
 export function isPublicAddress(address:string):boolean {
  const family=isIP(address);
- if(family===4){const parts=address.split('.').map(Number),[a,b,c]=parts;return !(a===0||a===10||a===127||a>=224||(a===100&&b>=64&&b<=127)||(a===169&&b===254)||(a===172&&b>=16&&b<=31)||(a===192&&(b===168||b===0||b===2))||(a===198&&(b===18||b===19||b===51&&c===100))||(a===203&&b===0&&c===113));}
- if(family===6){const normalized=address.toLowerCase();if(normalized.includes('.'))return false;const first=Number.parseInt(normalized.split(':')[0],16),second=Number.parseInt(normalized.split(':')[1]||'0',16);return first>=0x2000&&first<=0x3fff&&first!==0x2002&&!(first===0x2001&&(second<=0x1ff||second===0xdb8));}
+ if(family===4){const value=ipv4Number(address);return !restrictedIpv4.some(([start,size])=>value>=start&&value<start+size);}
+ // Global unicast only, excluding 6to4, 2001::/23 protocol assignments (Teredo/ORCHID), and 2001:db8::/32 and 3fff::/20 documentation.
+ if(family===6){const normalized=address.toLowerCase();if(normalized.includes('.'))return false;const first=Number.parseInt(normalized.split(':')[0],16),second=Number.parseInt(normalized.split(':')[1]||'0',16);return first>=0x2000&&first<=0x3fff&&first!==0x2002&&!(first===0x2001&&(second<=0x1ff||second===0xdb8))&&!(first===0x3fff&&second<=0xfff);}
  return false;
 }
-async function fetchBounded(url:URL,redirects=0):Promise<{html:string;url:string}> {
- assert(['https:','http:'].includes(url.protocol)&&!url.username&&!url.password&&!url.hash&&(!url.port||url.port==='443'&&url.protocol==='https:'||url.port==='80'&&url.protocol==='http:'),'ANALYZER_URL','Only public HTTP(S) website URLs are supported');
+export interface ResolvedAddress {address:string;family:number;}
+/** Network policy for one analysis. Production uses ANALYZER_POLICY unchanged; overrides exist for tests and are never read from the environment or request. */
+export interface AnalyzerPolicy {resolve:(hostname:string)=>Promise<ResolvedAddress[]>;allowAddress:(address:string)=>boolean;allowPort:(url:URL)=>boolean;deadlineMs:number;idleTimeoutMs:number;maxBytes:number;maxRedirects:number;}
+export const ANALYZER_POLICY:Readonly<AnalyzerPolicy>=Object.freeze({resolve:(hostname:string)=>lookup(hostname,{all:true,verbatim:true}),allowAddress:isPublicAddress,allowPort:(url:URL)=>!url.port,deadlineMs:15_000,idleTimeoutMs:8_000,maxBytes:2*1024*1024,maxRedirects:3});
+const timedOut=()=>new DomainError('ANALYZER_TIMEOUT','Website analysis exceeded its time limit',504);
+function remaining(deadline:number):number {const ms=deadline-Date.now();if(ms<=0)throw timedOut();return ms;}
+async function beforeDeadline<T>(work:Promise<T>,deadline:number):Promise<T> {let timer:NodeJS.Timeout|undefined;try{return await Promise.race([work,new Promise<never>((_,reject)=>{timer=setTimeout(()=>reject(timedOut()),remaining(deadline));})]);}finally{clearTimeout(timer);}}
+// Node >= 20 connects with autoSelectFamily and asks lookup for {all:true}, expecting an address array instead of (address, family).
+const pinnedLookup=(pinned:ResolvedAddress)=>(_host:string,options:unknown,callback:(error:Error|null,address:string|ResolvedAddress[],family?:number)=>void)=>(options as {all?:boolean}|undefined)?.all?callback(null,[{address:pinned.address,family:pinned.family}]):callback(null,pinned.address,pinned.family);
+/** The deadline spans DNS, connection, TLS, every redirect and the body; the idle timeout only bounds a stalled socket. */
+async function fetchBounded(url:URL,policy:AnalyzerPolicy,deadline:number,redirects=0):Promise<{html:string;url:string}> {
+ assert(['https:','http:'].includes(url.protocol)&&!url.username&&!url.password&&!url.hash&&policy.allowPort(url),'ANALYZER_URL','Only public HTTP(S) website URLs are supported');
  assert(!/(^|\.)(localhost|local|internal|test|invalid)$/.test(url.hostname),'ANALYZER_URL','Private websites cannot be analyzed');
  const hostname=url.hostname.replace(/^\[|\]$/g,'');
- const addresses=isIP(hostname)?[{address:hostname,family:isIP(hostname)}]:await lookup(hostname,{all:true,verbatim:true});
- assert(addresses.length>0&&addresses.every(item=>isPublicAddress(item.address)),'ANALYZER_ADDRESS','Website resolves to a restricted network');
- const address=addresses[0];
+ const addresses=isIP(hostname)?[{address:hostname,family:isIP(hostname)}]:await beforeDeadline(policy.resolve(hostname),deadline);
+ assert(addresses.length>0&&addresses.every(item=>policy.allowAddress(item.address)),'ANALYZER_ADDRESS','Website resolves to a restricted network');
+ let timer:NodeJS.Timeout|undefined;
  const response=await new Promise<{status:number;location?:string;html:string}>((accept,reject)=>{
-  const request=(url.protocol==='https:'?httpsRequest:httpRequest)(url,{method:'GET',headers:{'User-Agent':'ClinicsCMS-WebsiteAnalyzer/1.0','Accept':'text/html','Accept-Encoding':'identity'},lookup:((_host:string,_options:unknown,callback:(error:Error|null,address:string,family:number)=>void)=>callback(null,address.address,address.family)) as never,timeout:8000},res=>{
+  const request=(url.protocol==='https:'?httpsRequest:httpRequest)(url,{method:'GET',headers:{'User-Agent':'ClinicsCMS-WebsiteAnalyzer/1.0','Accept':'text/html','Accept-Encoding':'identity'},lookup:pinnedLookup(addresses[0]) as never,agent:false,timeout:policy.idleTimeoutMs},res=>{
    const status=res.statusCode??0;
    if(status>=300&&status<400){res.resume();accept({status,location:res.headers.location,html:''});return;}
    if(status!==200||!String(res.headers['content-type']??'').toLowerCase().includes('text/html')||res.headers['content-encoding']&&res.headers['content-encoding']!=='identity'){res.resume();reject(new Error('Website did not return a supported HTML response'));return;}
-   let size=0;const chunks:Buffer[]=[];res.on('data',(chunk:Buffer)=>{size+=chunk.length;if(size>2*1024*1024){request.destroy(new Error('Website exceeds the analyzer size limit'));return;}chunks.push(chunk);});res.on('end',()=>accept({status,html:Buffer.concat(chunks).toString('utf8')}));res.on('error',reject);
-  });request.on('error',reject);request.on('timeout',()=>request.destroy(new Error('Website request timed out')));request.end();
- });
- if(response.status>=300&&response.status<400){assert(redirects<3&&response.location,'ANALYZER_REDIRECT','Too many or invalid redirects');return fetchBounded(new URL(response.location,url),redirects+1);}
+   // Reject before destroying: a body that arrives in one chunk would otherwise still reach 'end' and be accepted truncated.
+   let size=0;const chunks:Buffer[]=[];res.on('data',(chunk:Buffer)=>{size+=chunk.length;if(size>policy.maxBytes){reject(new Error('Website exceeds the analyzer size limit'));request.destroy();return;}chunks.push(chunk);});res.on('end',()=>accept({status,html:Buffer.concat(chunks).toString('utf8')}));res.on('error',reject);
+  });request.on('error',reject);request.on('timeout',()=>{reject(new Error('Website request timed out'));request.destroy();});
+  try{timer=setTimeout(()=>{reject(timedOut());request.destroy();},remaining(deadline));}catch(error){reject(error);request.destroy();return;}request.end();
+ }).finally(()=>clearTimeout(timer));
+ if(response.status>=300&&response.status<400){assert(redirects<policy.maxRedirects&&response.location,'ANALYZER_REDIRECT','Too many or invalid redirects');return fetchBounded(new URL(response.location,url),policy,deadline,redirects+1);}
  return {html:response.html,url:url.href};
 }
-export async function analyzePublicWebsiteLocal(value:string) {
+type Attributes=Record<string,string>;
+function attributesOf(source:string):Attributes {
+ const attributes:Attributes={};
+ for(const match of source.matchAll(/([^\s"'<>\/=]+)(?:\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'=<>`]+)))?/g)){const name=match[1].toLowerCase();if(!(name in attributes))attributes[name]=match[2]??match[3]??match[4]??'';}
+ return attributes;
+}
+/** One forward pass over the markup (no backtracking regex over the document). Script/style bodies are raw text, as in browsers; an unclosed one runs to the end. */
+export function inspectHtml(html:string) {
+ const lower=html.replace(/[A-Z]+/g,text=>text.toLowerCase()),tagName=/(\/?)([a-z][a-z0-9-]*)/y;
+ const found={title:false,description:false,mobileViewport:false,mainHeading:false,bookingLink:false,contactLink:false,structuredData:false,socialTags:false};
+ let position=0;
+ while(position<html.length){
+  const open=lower.indexOf('<',position);if(open<0)break;
+  tagName.lastIndex=open+1;const name=tagName.exec(lower);if(!name){position=open+1;continue;}
+  const close=lower.indexOf('>',tagName.lastIndex);if(close<0)break;
+  position=close+1;if(name[1])continue;
+  const tag=name[2],attributes=attributesOf(html.slice(tagName.lastIndex,close)),href=(attributes.href??'').toLowerCase();
+  if(tag==='meta'){const kind=(attributes.name??'').toLowerCase();if(kind==='description')found.description=true;if(kind==='viewport')found.mobileViewport=true;if((attributes.property??'').toLowerCase()==='og:title')found.socialTags=true;}
+  if(tag==='h1')found.mainHeading=true;
+  if(tag==='a'&&/book|appointment|schedule/.test(href))found.bookingLink=true;
+  if(href.startsWith('tel:')||href.startsWith('mailto:')||href.includes('contact'))found.contactLink=true;
+  if(tag==='title'){const end=lower.indexOf('<',position),length=(end<0?html.length:end)-position;if(end>=0&&lower.startsWith('</title',end)&&length>=1&&length<=200)found.title=true;}
+  if(tag==='script'||tag==='style'){if(tag==='script'&&(attributes.type??'').trim().toLowerCase()==='application/ld+json')found.structuredData=true;const end=lower.indexOf(`</${tag}`,position);if(end<0)break;position=end;}
+ }
+ return found;
+}
+export async function analyzePublicWebsiteLocal(value:string,overrides:Partial<AnalyzerPolicy>={}) {
  assert(typeof value==='string'&&value.length<=2048,'ANALYZER_URL','Invalid website URL');let url:URL;try{url=new URL(value);}catch{assert(false,'ANALYZER_URL','Enter a full website URL');}
- const {html,url:finalUrl}=await fetchBounded(url);
- const visible=html.replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi,'').replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi,'');
- const checks={https:finalUrl.startsWith('https:'),title:/<title\b[^>]*>[^<]{1,200}<\/title>/i.test(html),description:/<meta\b[^>]*\bname\s*=\s*["']description["']/i.test(html),mobileViewport:/<meta\b[^>]*\bname\s*=\s*["']viewport["']/i.test(html),mainHeading:/<h1\b/i.test(visible),bookingLink:/<a\b[^>]*href\s*=\s*["'][^"']*(book|appointment|schedule)[^"']*["']/i.test(visible),contactLink:/href\s*=\s*["'](?:tel:|mailto:|[^"']*contact)/i.test(visible),structuredData:/<script\b[^>]*type\s*=\s*["']application\/ld\+json["']/i.test(html),socialTags:/<meta\b[^>]*property\s*=\s*["']og:title["']/i.test(html)};
+ const policy={...ANALYZER_POLICY,...overrides};
+ const {html,url:finalUrl}=await fetchBounded(url,policy,Date.now()+policy.deadlineMs);
+ const checks={https:finalUrl.startsWith('https:'),...inspectHtml(html)};
  return {url:finalUrl,checks,score:Math.round(Object.values(checks).filter(Boolean).length/Object.keys(checks).length*100),scope:'One public HTML page; heuristic observations, not a technical SEO or security certification.',fetchedAt:new Date().toISOString()};
 }
 
