@@ -1,7 +1,7 @@
 /* Author: ramanpal singh | URL: https://kwebby.com */
 import { z } from 'zod';
 import { DomainError } from '../../contracts/src/index.js';
-import { websiteSettingsSchema } from '../../contracts/src/website.js';
+import { websiteSettingsSchema, httpsUrlSchema, validPageSlug } from '../../contracts/src/website.js';
 
 const id = z.string().min(1).max(100).regex(/^[A-Za-z0-9_-]+$/);
 const text = z.string().trim().min(1).max(500);
@@ -16,7 +16,9 @@ const locale = z.string().max(30).refine(value => { try { return Intl.getCanonic
 const email = z.string().email().max(254);
 const phone = z.string().max(40);
 const object = z.record(z.string(), z.unknown());
-const httpsUrl = z.string().max(2048).url().refine(value => new URL(value).protocol === 'https:', 'HTTPS URL required');
+const httpsUrl = httpsUrlSchema;
+// Matched case-insensitively: DOM-like renderers treat onClick/ONCLICK/onclick alike, and every on* key is an event handler.
+const executableKey = /^(?:__proto__|prototype|constructor|html|innerhtml|outerhtml|srcdoc|dangerouslysetinnerhtml|style|srcset|formaction|xlink:href|on[a-z].*)$/i;
 const blocks = z.array(object).max(2000).superRefine((value, ctx) => {
   const encoded = JSON.stringify(value);
   if (new TextEncoder().encode(encoded).length > 200*1024) ctx.addIssue({code:'custom',message:'Document exceeds the portable 200 KiB limit; split it into separate documents',params:{httpStatus:413}});
@@ -26,7 +28,7 @@ const blocks = z.array(object).max(2000).superRefine((value, ctx) => {
     if (Array.isArray(node)) { node.forEach(v => visit(v,depth+1)); return; }
     if (!node || typeof node !== 'object') return;
     for (const [key, val] of Object.entries(node)) {
-      if (/^(?:__proto__|prototype|constructor|html|innerHTML|srcDoc|on(?:click|load|error|mouse.*|key.*|focus|blur|submit))$/.test(key)) ctx.addIssue({code:'custom',message:'Executable document properties are not allowed'});
+      if (executableKey.test(key)) ctx.addIssue({code:'custom',message:'Executable document properties are not allowed'});
       if ((key === 'href' || key === 'url' || key === 'src') && typeof val === 'string' && val && !/^(?:https:\/\/|\/api\/v1\/files\/|\/api\/v1\/public\/assets\/|mailto:|tel:|#)/i.test(val)) ctx.addIssue({code:'custom',message:'Unsafe document URL'});
       visit(val,depth+1);
     }
@@ -35,11 +37,17 @@ const blocks = z.array(object).max(2000).superRefine((value, ctx) => {
 const mediaUrls=(value:unknown):string[]=>{const urls:string[]=[];const visit=(v:any)=>{if(Array.isArray(v))v.forEach(visit);else if(v&&typeof v==='object'){if(['image','video','audio','file'].includes(v.type)&&v.props?.url)urls.push(String(v.props.url));Object.values(v).forEach(visit);}};visit(value);return urls;};
 const clinicalBlocks=blocks.refine(value=>mediaUrls(value).every(url=>/^\/api\/v1\/files\/[A-Za-z0-9_-]+$/.test(url)),'Clinical media must use a protected clinic upload');
 const publicBlocks=blocks.refine(value=>mediaUrls(value).every(url=>/^\/api\/v1\/public\/assets\/[A-Za-z0-9_-]+$/.test(url)),'Public media must use a separately approved public asset');
+const pageSlug = z.string().regex(/^[a-z0-9]+(?:[-/][a-z0-9]+)*$/).max(250).refine(validPageSlug, 'This URL is reserved for the application');
+/** Firestore commits at most 450 staged writes plus guard documents per transaction. Approving a pay run writes one
+ * payslip document and one notification outbox event per employee (2N), plus the payroll record, its audit entry and
+ * the payroll.approved outbox event (3), under two guard documents (record and branch/period): 2N + 5 <= 450 holds for
+ * N <= 222. 200 keeps headroom and applies on every database so a valid draft can always be approved. */
+export const MAX_PAYROLL_EMPLOYEES = 200;
 const branch = { branchId:id };
 const patient = { ...branch, patientId:id };
 const observations = z.object({bloodPressure:z.string().max(50).optional(),pulse:z.number().min(0).max(500).optional(),temperature:z.number().min(20).max(50).optional(),weight:z.number().min(0).max(1000).optional(),height:z.number().min(0).max(300).optional()}).strict();
 const salaryItems = z.array(z.object({label:text,amount:decimal}).strict()).max(50);
-const seo = z.object({title:z.string().max(120).optional(),description:z.string().max(400).optional(),canonical:httpsUrl.optional(),indexable:z.boolean().optional(),socialTitle:z.string().max(120).optional(),socialDescription:z.string().max(400).optional(),socialImage:z.string().max(2048).regex(/^(https:\/\/|\/api\/v1\/public\/assets\/)/).optional(),socialImageAlt:z.string().max(300).optional(),schemaTypes:z.array(z.enum(['WebSite','WebPage','MedicalClinic','Person','IndividualPhysician','Service','Offer','MedicalWebPage','Article','BlogPosting','FAQPage','AboutPage','ContactPage','CollectionPage','ItemList','WebApplication','Organization','SoftwareApplication','BreadcrumbList'])).max(10).optional(),schema:object.optional(),translations:z.array(z.object({locale,slug:z.string().regex(/^[a-z0-9]+(?:[-/][a-z0-9]+)*$/)}).strict()).max(30).optional()}).strict();
+const seo = z.object({title:z.string().max(120).optional(),description:z.string().max(400).optional(),canonical:httpsUrl.optional(),indexable:z.boolean().optional(),socialTitle:z.string().max(120).optional(),socialDescription:z.string().max(400).optional(),socialImage:z.string().max(2048).regex(/^(https:\/\/|\/api\/v1\/public\/assets\/)/).optional(),socialImageAlt:z.string().max(300).optional(),schemaTypes:z.array(z.enum(['WebSite','WebPage','MedicalClinic','Person','IndividualPhysician','Service','Offer','MedicalWebPage','Article','BlogPosting','FAQPage','AboutPage','ContactPage','CollectionPage','ItemList','WebApplication','Organization','SoftwareApplication','BreadcrumbList'])).max(10).optional(),schema:object.optional(),translations:z.array(z.object({locale,slug:pageSlug}).strict()).max(30).optional()}).strict();
 export const settingsSchemas:Record<string,z.ZodType> = {
   business:z.object({clinicName:text,name:text.optional(),country:z.string().length(2),currency,timezone,locale,address:note,email,phone,businessIds:z.record(z.string().max(50),z.string().max(150)).default({}),legalName:text.optional(),website:httpsUrl.optional(),logoFileId:id.optional(),bankDetails:note.optional(),fiscalYearStart:z.number().int().min(1).max(12).default(1),invoicePrefix:z.string().regex(/^[A-Z0-9-]{1,20}$/).default('INV'),taxLabel:z.string().max(80).optional(),publicBooking:z.boolean().default(true)}).strict(),
   localization:z.object({country:z.string().length(2),currency,timezone,locale,dateFormat:z.enum(['DD/MM/YYYY','MM/DD/YYYY','YYYY-MM-DD']),fiscalYearStart:z.number().int().min(1).max(12),features:z.object({ai:z.boolean(),publicTools:z.boolean(),onlinePayments:z.boolean(),payroll:z.boolean()}).strict()}).strict(),
@@ -62,9 +70,9 @@ export const schemas = {
   employees:z.object({...branch,userId:id.optional(),name:text,email,jobTitle:text,role:z.enum(['doctor','nurse','receptionist','manager','accountant','hr','editor','employee']).default('employee'),registrationNumber:z.string().max(100).optional(),specialty:text.optional(),publicProfile:z.boolean().default(false),salary:z.object({currency,base:decimal,earnings:salaryItems.default([]),deductions:salaryItems.default([])}).strict(),joinedOn:date.optional()}).strict(),
   services:z.object({...branch,name:text,description:note.optional(),price:decimal,currency,durationMinutes:z.number().int().min(5).max(480),public:z.boolean().default(false),taxRate:decimal.default('0')}).strict(),
   invoices:z.object({...patient,currency,lines:z.array(z.object({description:text,quantity:decimal,unitPrice:decimal,taxRate:decimal.default('0'),discount:decimal.default('0')}).strict()).min(1).max(200),notes:blocks.default([]),dueAt:datetime.optional(),templateId:id.optional()}).strict(),
-  payroll:z.object({...branch,period:z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/),employeeIds:z.array(id).min(1).max(500),adjustments:z.array(z.object({employeeId:id,label:text,amount:decimal,kind:z.enum(['earning','deduction'])}).strict()).max(1000).default([]),templateId:id.optional()}).strict(),
+  payroll:z.object({...branch,period:z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/),employeeIds:z.array(id).min(1).max(MAX_PAYROLL_EMPLOYEES,`Split pay runs larger than ${MAX_PAYROLL_EMPLOYEES} employees`),adjustments:z.array(z.object({employeeId:id,label:text,amount:decimal,kind:z.enum(['earning','deduction'])}).strict()).max(1000).default([]),templateId:id.optional()}).strict(),
   templates:z.object({branchId:id.optional(),name:text,kind:z.enum(['invoice','payslip']),content:blocks.default([]),design:z.object({accent:z.string().regex(/^#[\da-fA-F]{6}$/),font:z.enum(['system','serif','mono']),showLogo:z.boolean(),columns:z.array(z.enum(['description','quantity','unitPrice','discount','tax','total'])).min(1).max(6),footer:note.optional(),terms:note.optional()}).strict()}).strict(),
-  pages:z.object({branchId:id.optional(),title:text,slug:z.string().regex(/^[a-z0-9]+(?:[-/][a-z0-9]+)*$/).max(250),kind:z.enum(['home','location','doctor','service','medical','article','faq','about','contact','directory','tool','vendor']),locale,content:publicBlocks,seo:seo.optional(),reviewedBy:id.optional(),citations:z.array(z.object({title:text,url:httpsUrl}).strict()).max(100).optional()}).strict(),
+  pages:z.object({branchId:id.optional(),title:text,slug:pageSlug,kind:z.enum(['home','location','doctor','service','medical','article','faq','about','contact','directory','tool','vendor']),locale,content:publicBlocks,seo:seo.optional(),reviewedBy:id.optional(),citations:z.array(z.object({title:text,url:httpsUrl}).strict()).max(100).optional()}).strict(),
   conversations:z.object({...branch,title:text,kind:z.enum(['staff','patient-service','clinical']),participantIds:z.array(id).min(1).max(100),patientId:id.optional(),assignedTo:id.optional()}).strict(),
   consents:z.object({...patient,purpose:z.enum(['care','marketing','ai','caregiver','reminders']),granted:z.boolean(),versionLabel:text,source:text}).strict(),
   settings:z.object({key:z.enum(['business','localization','notifications','website','ai-policy']),value:object}).strict(),
@@ -97,5 +105,7 @@ export const actionSchemas = {
   credit:z.object({invoiceId:id,amount:decimal,reason:text,idempotencyKey:z.string().min(8).max(100)}).strict(),
   preferences:z.object({categories:z.array(z.enum(['security','operations','clinical','finance','hr','messages','appointments','content'])).max(8),email:z.boolean(),inApp:z.boolean(),quietStart:time.optional(),quietEnd:time.optional(),timezone}).strict(),
 };
-export function parse<T>(schema:z.ZodType<T>,input:unknown):T { const parsed=schema.safeParse(input); if(!parsed.success) {const oversized=parsed.error.issues.some(issue=>issue.code==='custom'&&issue.params?.httpStatus===413);throw new DomainError(oversized?'DOCUMENT_TOO_LARGE':'VALIDATION',parsed.error.issues.map(v=>`${v.path.join('.')}: ${v.message}`).join('; '),oversized?413:400);} return parsed.data; }
+/** PostgreSQL JSONB cannot store U+0000, so NUL in any submitted string or key is a validation error on every database. */
+export function containsNul(input:unknown):boolean { const stack:unknown[]=[input]; while(stack.length){ const value=stack.pop(); if(typeof value==='string'){ if(value.includes('\u0000'))return true; } else if(Array.isArray(value)){ for(const entry of value)stack.push(entry); } else if(value&&typeof value==='object')for(const [key,entry] of Object.entries(value)){ if(key.includes('\u0000'))return true; stack.push(entry); } } return false; }
+export function parse<T>(schema:z.ZodType<T>,input:unknown):T { if(containsNul(input))throw new DomainError('VALIDATION','Text must not contain NUL characters',400); const parsed=schema.safeParse(input); if(!parsed.success) {const oversized=parsed.error.issues.some(issue=>issue.code==='custom'&&issue.params?.httpStatus===413);throw new DomainError(oversized?'DOCUMENT_TOO_LARGE':'VALIDATION',parsed.error.issues.map(v=>`${v.path.join('.')}: ${v.message}`).join('; '),oversized?413:400);} return parsed.data; }
 export { blocks, id, decimal, currency, mediaUrls };

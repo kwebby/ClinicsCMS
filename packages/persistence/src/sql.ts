@@ -9,17 +9,30 @@ interface RecordRow { collection: string; id: string; organization_id: string; v
 interface LockRow { id:string; value:number; }
 interface Schema { clinic_records:RecordRow; clinic_locks:LockRow; }
 const decode=(row:{payload:unknown}):Entity=>typeof row.payload==='string'?JSON.parse(row.payload):row.payload as Entity;
+/** Seconds a transaction waits for one lock row before failing with BUSY instead of holding a pooled connection indefinitely. */
+const LOCK_TIMEOUT_SECONDS=10;
+const busy=()=>new DomainError('BUSY','The records involved are busy. Try again shortly.',503);
 export class SqlDatabase implements Database {
  readonly connection:Kysely<Schema>;
+ /** MySQL only: whether clinic_records.id uses a binary collation, so the primary key already orders ids by bytes. */
+ private binaryIds=false;
  constructor(public driver:'postgres'|'mysql'|'supabase', url:string) {
   if(!url) throw new Error('DATABASE_URL is required');
   const dialect=driver==='mysql'?new MysqlDialect({pool:mysql.createPool({uri:url,connectionLimit:10,decimalNumbers:false})}):new PostgresDialect({pool:new pg.Pool({connectionString:url,max:10})});
   this.connection=new Kysely<Schema>({dialect});
  }
  async initialize() {
-  await this.connection.schema.createTable('clinic_records').ifNotExists().addColumn('collection','varchar(80)',c=>c.notNull()).addColumn('id','varchar(128)',c=>c.notNull()).addColumn('organization_id','varchar(128)',c=>c.notNull()).addColumn('version','integer',c=>c.notNull()).addColumn('payload',this.driver==='mysql'?'json':'jsonb',c=>c.notNull()).addPrimaryKeyConstraint('clinic_records_pk',['collection','id']).execute();
+  // New MySQL tables compare ids by code point (case-sensitive, no padding) like every other adapter.
+  await this.connection.schema.createTable('clinic_records').ifNotExists().addColumn('collection','varchar(80)',c=>c.notNull()).addColumn('id',this.driver==='mysql'?sql`varchar(128) character set utf8mb4 collate utf8mb4_0900_bin`:'varchar(128)',c=>c.notNull()).addColumn('organization_id','varchar(128)',c=>c.notNull()).addColumn('version','integer',c=>c.notNull()).addColumn('payload',this.driver==='mysql'?'json':'jsonb',c=>c.notNull()).addPrimaryKeyConstraint('clinic_records_pk',['collection','id']).execute();
   await this.connection.schema.createTable('clinic_locks').ifNotExists().addColumn('id','varchar(240)',c=>c.primaryKey()).addColumn('value','integer',c=>c.notNull().defaultTo(0)).execute();
-  if(this.driver!=='mysql') await this.connection.schema.createIndex('clinic_records_organization').ifNotExists().on('clinic_records').columns(['organization_id','collection']).execute();
+  if(this.driver!=='mysql') {
+   await this.connection.schema.createIndex('clinic_records_organization').ifNotExists().on('clinic_records').columns(['organization_id','collection']).execute();
+   // Cursor pagination orders ids by bytes (COLLATE "C"), independent of the database locale; this index serves that order.
+   await sql`create index if not exists clinic_records_collection_id_bytes on clinic_records (collection, id collate "C")`.execute(this.connection);
+  } else {
+   const column=await sql<{id_collation:string|null}>`select collation_name as id_collation from information_schema.columns where table_schema = database() and table_name = 'clinic_records' and column_name = 'id'`.execute(this.connection);
+   this.binaryIds=/_bin$/i.test(String(column.rows[0]?.id_collation??''));
+  }
  }
  private repository(db:Kysely<Schema>):Repository {
   const get=async<T extends Entity>(c:string,id:string):Promise<T|null>=>{const row=await db.selectFrom('clinic_records').selectAll().where('collection','=',c).where('id','=',id).executeTakeFirst();return row?decode(row) as T:null;};
@@ -31,10 +44,16 @@ export class SqlDatabase implements Database {
      if(!/^[a-zA-Z][a-zA-Z0-9_]{0,63}$/.test(field)) throw new DomainError('QUERY','Invalid query field');
      if(field==='organizationId') stmt=stmt.where('organization_id','=',String(value));
      else if(field==='id') stmt=stmt.where('id','=',String(value));
-     else { const expression=this.driver==='mysql'?sql<string>`JSON_UNQUOTE(JSON_EXTRACT(payload, ${'$.'+field}))`:sql<string>`payload ->> ${field}`;if(value===null)stmt=this.driver==='mysql'?stmt.where(sql<string>`JSON_TYPE(JSON_EXTRACT(payload, ${'$.'+field}))`,'=','NULL'):stmt.where(sql<string>`jsonb_typeof(payload -> ${field})`,'=','null');else stmt=stmt.where(expression,'=',String(value)); }
+     else if(value===null)stmt=this.driver==='mysql'?stmt.where(sql<string>`JSON_TYPE(JSON_EXTRACT(payload, ${'$.'+field}))`,'=','NULL'):stmt.where(sql<string>`jsonb_typeof(payload -> ${field})`,'=','null');
+     // Typed JSON equality, as in the memory and Firestore adapters: 1, "1" and true never match each other.
+     else stmt=stmt.where(this.driver==='mysql'?sql<boolean>`JSON_EXTRACT(payload, ${'$.'+field}) = CAST(${JSON.stringify(value)} AS JSON)`:sql<boolean>`payload -> ${field} = cast(${JSON.stringify(value)} as jsonb)`);
     }
-    if(q.after)stmt=stmt.where('id','>',q.after);
-    const rows=await stmt.orderBy('id','asc').limit(Math.min(q.limit??10000,10000)).execute();return rows.map(r=>decode(r) as T);
+    // Ids are ordered and compared as bytes, not by a locale collation (which may ignore case or punctuation), so cursors
+    // match the memory and Firestore adapters. Older MySQL tables with a case-insensitive id column fall back to a cast.
+    const desc=q.order==='desc',op=sql.raw(desc?'<':'>'),castIds=this.driver==='mysql'&&!this.binaryIds;
+    const idBytes=this.driver!=='mysql'?sql`id collate "C"`:castIds?sql`CAST(id AS BINARY)`:sql`id`;
+    if(q.after)stmt=stmt.where(castIds?sql<boolean>`CAST(id AS BINARY) ${op} CAST(${q.after} AS BINARY)`:sql<boolean>`${idBytes} ${op} ${q.after}`);
+    const rows=await stmt.orderBy(idBytes,desc?'desc':'asc').limit(Math.min(q.limit??10000,10000)).execute();return rows.map(r=>decode(r) as T);
    },
    put:async<T extends Entity>(c:string,v:T,e?:number):Promise<T>=>{
     validateWrite(await get(c,v.id),v,e);
@@ -57,6 +76,8 @@ export class SqlDatabase implements Database {
  async transaction<T>(keys:string[],fn:(tx:Repository)=>Promise<T>):Promise<T> {
   for(let attempt=0;;attempt++){
    try{return await this.connection.transaction().setIsolationLevel('read committed').execute(async tx=>{
+    if(this.driver==='mysql')await sql`SET SESSION innodb_lock_wait_timeout = ${sql.raw(String(LOCK_TIMEOUT_SECONDS))}`.execute(tx);
+    else await sql`set local lock_timeout = ${sql.raw(`'${LOCK_TIMEOUT_SECONDS}s'`)}`.execute(tx);
     for(const key of [...new Set(keys)].sort()) {
      const id=key.length<=230?key:(await import('node:crypto')).createHash('sha256').update(key).digest('hex');
      if(this.driver==='mysql') await tx.insertInto('clinic_locks').values({id,value:0}).ignore().execute();
@@ -65,8 +86,12 @@ export class SqlDatabase implements Database {
     }
     return fn(this.repository(tx));
    });}catch(error:any){
-    const retryable=['ER_LOCK_DEADLOCK','ER_LOCK_WAIT_TIMEOUT','40001','40P01'].includes(String(error.code))||[1213,1205].includes(error.errno)||error.sqlState==='40001';
-    if(!retryable||attempt>=7)throw error;
+    if(error instanceof DomainError)throw error;
+    // Deadlocks and serialization failures are retried; a lock wait timeout signals sustained contention and is not.
+    const retryable=['ER_LOCK_DEADLOCK','40001','40P01'].includes(String(error.code))||error.errno===1213||error.sqlState==='40001';
+    const timedOut=['ER_LOCK_WAIT_TIMEOUT','55P03'].includes(String(error.code))||error.errno===1205;
+    if(timedOut||retryable&&attempt>=7)throw busy();
+    if(!retryable)throw error;
     // Callbacks contain only repository reads and staged business writes. Provider work remains outside transactions.
     await new Promise(resolve=>setTimeout(resolve,Math.min(250,10*2**attempt)+Math.floor(Math.random()*20)));
    }

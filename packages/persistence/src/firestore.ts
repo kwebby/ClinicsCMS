@@ -3,7 +3,7 @@ import { getApps, initializeApp, applicationDefault } from 'firebase-admin/app';
 import { getFirestore, type Firestore, type Transaction, type Query as FsQuery } from 'firebase-admin/firestore';
 import { createHash } from 'node:crypto';
 import { DomainError, type Database, type Entity, type Query, type Repository } from '../../contracts/src/index.js';
-import { validateWrite, validateRecordSize, matches } from './memory.js';
+import { validateWrite, validateRecordSize, matches, afterCursor, sortById } from './memory.js';
 
 /** Keep canonical JSON lossless (including nested BlockNote table arrays); query only scalar projections. */
 export function encodeFirestoreRecord(record:Entity):Record<string,unknown>{return {...Object.fromEntries(Object.entries(record).filter(([,value])=>value===null||['string','number','boolean'].includes(typeof value))),_payload:JSON.stringify(record)};}
@@ -37,10 +37,12 @@ export class FirestoreDatabase implements Database {
    list:async<T extends Entity>(c:string,q:Query={}):Promise<T[]>=>{
     let stmt:FsQuery=this.collection(c);
     for(const [field,value]of Object.entries(q.eq??{})){if(!/^[a-zA-Z][a-zA-Z0-9_]{0,63}$/.test(field))throw new DomainError('QUERY','Invalid query field');stmt=stmt.where(field,'==',value);}
-    stmt=stmt.orderBy('__name__');if(q.after)stmt=stmt.startAfter(ref(c,q.after));stmt=stmt.limit(Math.min(q.limit??10000,10000));
+    const limit=Math.min(q.limit??10000,10000),staged=[...pending.values()].filter(p=>p.collection===c);
+    // Over-fetch by the staged writes so staged deletions or no-longer-matching updates cannot shorten a full page.
+    stmt=stmt.orderBy('__name__',q.order==='desc'?'desc':'asc');if(q.after)stmt=stmt.startAfter(ref(c,q.after));stmt=stmt.limit(limit+staged.length);
     const snap=tx?await tx.get(stmt):await stmt.get();const values=new Map(snap.docs.map(d=>[d.id,decodeFirestoreRecord(d.data()) as T]));
-    for(const p of pending.values())if(p.collection===c){if(p.value&&matches(p.value,q)&&(!q.after||p.id>q.after))values.set(p.id,p.value as T);else values.delete(p.id);}
-    return [...values.values()].sort((a,b)=>a.id.localeCompare(b.id)).slice(0,q.limit??10000);
+    for(const p of staged){if(p.value&&matches(p.value,q)&&afterCursor(p.id,q))values.set(p.id,structuredClone(p.value) as T);else values.delete(p.id);}
+    return sortById([...values.values()],q.order).slice(0,limit);
    },
    put:async<T extends Entity>(c:string,v:T,e?:number):Promise<T>=>{validateWrite(await get(c,v.id),v,e);if(tx){pending.set(key(c,v.id),{collection:c,id:v.id,value:structuredClone(v),expected:e});return structuredClone(v);}return this.transaction([key(c,v.id)],r=>r.put(c,v,e));},
    remove:async(c,id,e)=>{const v=await get(c,id);if(!v||(e!==undefined&&v.version!==e))throw new DomainError('CONFLICT','Record changed',409);if(tx)pending.set(key(c,id),{collection:c,id,value:null,expected:e});else await this.transaction([key(c,id)],r=>r.remove(c,id,e));}
@@ -51,7 +53,7 @@ export class FirestoreDatabase implements Database {
  put<T extends Entity>(c:string,v:T,e?:number){return this.repository().put(c,v,e);}
  remove(c:string,id:string,e?:number){return this.repository().remove(c,id,e);}
  async transaction<T>(keys:string[],fn:(tx:Repository)=>Promise<T>):Promise<T> {
-  return this.db.runTransaction(async tx=>{
+  try{return await this.db.runTransaction(async tx=>{
    const guards=[];
    for(const key of [...new Set(keys)].sort()){const ref=this.db.collection('clinic_locks').doc(createHash('sha256').update(key).digest('hex'));const row=await tx.get(ref);guards.push({ref,version:Number(row.data()?.version??0)});}
    const pending=new Map<string,Pending>();const result=await fn(this.repository(tx,pending));
@@ -59,6 +61,10 @@ export class FirestoreDatabase implements Database {
    for(const g of guards)tx.set(g.ref,{version:g.version+1});
    for(const p of pending.values()){const ref=this.collection(p.collection).doc(p.id);if(p.value)tx.set(ref,encodeFirestoreRecord(p.value));else tx.delete(ref);}
    return result;
-  },{maxAttempts:5});
+  },{maxAttempts:5});}catch(error:any){
+   // Contention that outlasts the SDK retries (ABORTED) is a retryable condition for the caller, not an internal error.
+   if(!(error instanceof DomainError)&&(error?.code===10||error?.code==='aborted'||/contention/i.test(String(error?.message))))throw new DomainError('BUSY','The records involved are busy. Try again shortly.',503);
+   throw error;
+  }
  }
 }

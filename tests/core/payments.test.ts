@@ -5,7 +5,7 @@ import Stripe from 'stripe';
 import { ClinicService } from '../../packages/core/src/index.js';
 import { PaymentService, providerMinor, type IntegrationService } from '../../apps/api/src/integrations.js';
 import type { Actor, Entity } from '../../packages/contracts/src/index.js';
-import { MemoryDatabase } from './memory.js';
+import { MemoryDatabase } from '../../packages/persistence/src/memory.js';
 const actor:Actor={id:'owner',organizationId:'clinic',roles:['owner'],branchIds:['main'],patientIds:[],name:'Owner',email:'owner@example.test'};
 const otherBranch:Actor={...actor,id:'accountant',roles:['accountant'],branchIds:['another']};
 let db:MemoryDatabase;let core:ClinicService;let payment:PaymentService;let invoice:Record<string,any>;let stripeMock:any;let network:ReturnType<typeof vi.fn>;const stripe=new Stripe('sk_test_fake_key_only');

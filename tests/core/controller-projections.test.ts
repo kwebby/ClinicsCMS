@@ -2,7 +2,7 @@
 import { expect,test } from 'vitest';
 import { ClinicController,publicJob } from '../../apps/api/src/controllers.js';
 import { AuthService } from '../../apps/api/src/auth.js';
-import { MemoryDatabase } from './memory.js';
+import { MemoryDatabase } from '../../packages/persistence/src/memory.js';
 import type { Actor,Entity } from '../../packages/contracts/src/index.js';
 const owner:Actor={id:'owner',organizationId:'clinic',roles:['owner'],branchIds:['main'],patientIds:[],name:'Owner',email:'owner@example.test'};
 const row=(id:string,extra:Record<string,unknown>={}):Entity=>({id,organizationId:'clinic',version:1,createdAt:'2026-10-09T00:00:00Z',updatedAt:'2026-10-09T00:00:00Z',...extra});
