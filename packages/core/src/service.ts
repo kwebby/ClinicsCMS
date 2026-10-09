@@ -2,7 +2,7 @@
 import { randomUUID, createHash } from 'node:crypto';
 import { Decimal } from 'decimal.js';
 import { z } from 'zod';
-import { Actor, Collection, Database, Entity, Query, Repository, Role, DomainError, assert, isCollection, collections } from '../../contracts/src/index.js';
+import { Actor, Collection, Database, Entity, ListQuery, Query, Repository, Role, DomainError, assert, isCollection, collections } from '../../contracts/src/index.js';
 import { websiteAssetIds, type WebsiteSettings } from '../../contracts/src/website.js';
 import { schemas, actionSchemas as a, settingsSchemas, parse, Creatable, mediaUrls } from './schemas.js';
 import { adminRoles, staffRoles, hasRole, requireRole, requireWrite, baseVisible, branchAllowed, assertScope } from './access.js';
@@ -52,7 +52,7 @@ export class ClinicService {
  private async notification(repo:Repository,actor:Actor,userId:string,category:string,title:string,resourceId:string,branchId?:string):Promise<void>{
   await this.emit(repo,actor,'notification.requested',clean({userId,category,title,resourceId,branchId}));
  }
- async list(collection:Collection,actor:Actor,query:Query={}):Promise<Row[]>{
+ async list(collection:Collection,actor:Actor,query:ListQuery={}):Promise<Row[]>{
   assert(isCollection(collection),'NOT_FOUND','Collection not found',404);
   const numericLimit=Number(query.limit);const requested=Number.isFinite(numericLimit)?Math.max(1,Math.min(Math.floor(numericLimit),500)):100;
   const result:Row[]=[];let after=typeof query.after==='string'&&query.after?query.after:undefined;

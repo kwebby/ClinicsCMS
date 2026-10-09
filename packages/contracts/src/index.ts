@@ -3,7 +3,10 @@ export type Role = 'owner' | 'admin' | 'manager' | 'doctor' | 'nurse' | 'recepti
 export interface Actor { id: string; organizationId: string; roles: Role[]; branchIds: string[]; patientIds: string[]; name: string; email: string; }
 export interface Entity { id: string; organizationId: string; version: number; createdAt: string; updatedAt: string; [key: string]: unknown; }
 export type FilterValue = string | number | boolean | null;
-export interface Query { eq?: Record<string, FilterValue>; limit?: number; after?: string; }
+/** `order` defaults to ascending id order; with `desc`, `after` is an exclusive upper bound. */
+export interface Query { eq?: Record<string, FilterValue>; limit?: number; after?: string; order?: 'asc' | 'desc'; }
+/** Service-level list query: `q` is a case-insensitive search over a collection's display fields. */
+export interface ListQuery extends Query { q?: string; }
 export interface Repository {
  get<T extends Entity = Entity>(collection: string, id: string): Promise<T | null>;
  list<T extends Entity = Entity>(collection: string, query?: Query): Promise<T[]>;
