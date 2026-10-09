@@ -53,6 +53,28 @@ Use a dedicated test Valkey/Redis-compatible endpoint and supply its credentials
 
 Configure explicit disposable database test variables as described in [development](DEVELOPMENT.md#sqlfirestore-contracts), then run `pnpm certify` to produce dated files in `artifacts/certification/`. A default memory-only run leaves real-backend gates pending. Once the fictional browser fixture and application/scanner services are running, `pnpm test:e2e` creates `test-results/playwright-report.json`. `pnpm test:load-smoke` measures only the running loopback health endpoint and writes `.runtime/security/http-load.json`. Review and redact operational evidence before sharing it; never commit patient data, credentials, or generated backups.
 
+## Review remediation — 9 October 2026
+
+A code review of the domain, API, worker, web, platform and deployment layers found defects that only appear at realistic data volumes, with real DNS or SMTP failures, or under concurrent use. The fixes are described in the corresponding commits and guides; the main changes are:
+
+- Outbound delivery scans only due outbox rows in bounded slices and prunes old completed rows, so it no longer stops once the outbox grows. SMTP failures before acceptance are retried; ambiguous acceptance needs an explicit administrator decision.
+- The website analyzer works with real domain names again, runs in linear time and has one overall deadline.
+- Lists are bounded, searchable, ordered and resumable with a server cursor. New record IDs are time-ordered. Reference pickers search the server instead of showing the first 100 records.
+- Writes lock only the records, users, schedules and counters they affect instead of the whole organisation. Separation of duties applies to employee records, pay runs and leave.
+- Login failures no longer let a stranger lock out staff accounts, registration and password reset no longer reveal existing accounts, and integration secrets are cleared when their destination changes.
+- Runtime images are built from production dependencies only; ClamAV runs unprivileged on its own network; PostgreSQL WAL has a separate volume and a retention script.
+
+Local verification of this remediation (Node.js 22.22 instead of the required 24 LTS):
+
+| Check | Result |
+|---|---|
+| TypeScript | API/shared and web typechecks pass; full production build succeeds |
+| Automated regression suite | 261 passed, zero failed, with a local Redis for the HTTP authentication suite |
+| PostgreSQL | Adapter contract suite passed on a local PostgreSQL 16 (49 persistence tests, including all 15 contract scenarios); the 17/18 profiles run in CI |
+| Not run locally | MySQL 8.4 contracts, Docker image builds and scans, Compose deployment verification, firewall rules on a real host, and Playwright browser workflows |
+
+The changed Dockerfile, Compose services, firewall script and CI workflow still need their first CI run and a deployment on a target host. The container vulnerability gate has not been re-run against the rebuilt images.
+
 ## Still required before a clinic pilot
 
 - Real disposable Supabase and Firestore contract/capacity runs, including production indexes and recovery facilities; both managed and self-hosted Supabase deployment evidence where supported.
