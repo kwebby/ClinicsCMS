@@ -5,7 +5,7 @@ A self-hosted outpatient clinic platform built with NestJS 12, Next.js 16, React
 
 **Status: implementation candidate; not approved for a real-patient pilot.** Verification commands generate local reports in ignored artifact directories. A full release additionally requires real Supabase/Firestore certification, target Linux/proxy deployments, provider sandbox checks, recovery/performance evidence, clinic acceptance, and an independent penetration test. See the [implementation and verification record](docs/IMPLEMENTATION-STATUS.md) and [release gates](docs/security/RELEASE-GATES.md).
 
-The first GitHub container scan reports unresolved High/Critical findings in the runtime image. The security gate remains failing; see [container findings and required remediation](docs/security/CONTAINER-FINDINGS.md). Do not use this candidate with real patient data.
+The first GitHub container scan reports unresolved High/Critical findings in the runtime image. The security gate remains failing until the remediated images are rebuilt and rescanned; see [container findings and required remediation](docs/security/CONTAINER-FINDINGS.md). Do not use this candidate with real patient data.
 
 ## Start here
 
