@@ -1,6 +1,7 @@
 <!-- Author: ramanpal singh | URL: https://kwebby.com -->
 # ClinicsCMS release gates and certification evidence
 
+**Current blocker:** the published application image builds but reports unresolved High/Critical container findings. See [observed results and remediation requirements](CONTAINER-FINDINGS.md).
 ClinicsCMS provides implementation and automated checks; it is not a compliance certificate or an independent penetration-test report. Do not start the first real-patient pilot until all rows below have recorded passing evidence.
 
 | Gate | Required evidence | Current evidence source |

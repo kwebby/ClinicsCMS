@@ -54,13 +54,16 @@ jobs:
       - name: Build and scan application container
         run: |
           docker build -f deploy/Dockerfile --target application -t clinicscms:ci .
-          trivy image --severity HIGH,CRITICAL --exit-code 1 clinicscms:ci
           trivy image --format cyclonedx --output application-sbom.json clinicscms:ci
+          trivy image --severity HIGH,CRITICAL --format json --output container-vulnerabilities.json clinicscms:ci
+          trivy image --severity HIGH,CRITICAL --exit-code 1 clinicscms:ci
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
-        if: always()
+        if: always() && hashFiles('application-sbom.json') != ''
         with:
-          name: application-sbom
-          path: application-sbom.json
+          name: container-security-reports
+          path: |
+            application-sbom.json
+            container-vulnerabilities.json
           if-no-files-found: error
   sql-contracts:
     runs-on: ubuntu-24.04
