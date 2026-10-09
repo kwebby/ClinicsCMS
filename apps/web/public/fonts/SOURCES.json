@@ -1,0 +1,336 @@
+{
+  "author": "ramanpal singh",
+  "url": "https://kwebby.com",
+  "downloadedAt": "2026-10-09T13:56:25.794Z",
+  "licenseRepository": "https://github.com/google/fonts",
+  "licenseRevision": "51303ca9e8ac9dcea7b12d307ba568fd0e6fcfca",
+  "description": "Unmodified official Google Fonts WOFF2 subsets, self-hosted; normal variable weights 400–700. No runtime Google requests.",
+  "families": [
+    {
+      "id": "inter",
+      "family": "Inter",
+      "stylesheetUrl": "https://fonts.googleapis.com/css2?family=Inter:wght@400..700&display=swap",
+      "stylesheetSha256": "48a1db7487c0013829ea92e41146d2381226ac2af0e234ecb48349a0c3f04240",
+      "license": {
+        "spdx": "OFL-1.1",
+        "sourceUrl": "https://raw.githubusercontent.com/google/fonts/51303ca9e8ac9dcea7b12d307ba568fd0e6fcfca/ofl/inter/OFL.txt",
+        "file": "inter-OFL.txt",
+        "sha256": "5b9321a4298cfeb6b34354164a1c3afc3db114569984c502b9b35d988fd58c57"
+      },
+      "assets": [
+        {
+          "subset": "latin-ext",
+          "file": "inter-latin-ext-34b9c504cab7.woff2",
+          "bytes": 85068,
+          "sha256": "34b9c504cab7a73e37b746343a449132e56cf7b5481af2cb81dc74dcff25c956",
+          "sourceUrl": "https://fonts.gstatic.com/s/inter/v20/UcC73FwrK3iLTeHuS_nVMrMxCp50SjIa25L7SUc.woff2",
+          "weight": "400 700",
+          "style": "normal",
+          "unicodeRange": "U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF"
+        },
+        {
+          "subset": "latin",
+          "file": "inter-latin-3100e775e861.woff2",
+          "bytes": 48256,
+          "sha256": "3100e775e8616cd2611beecfa23a4263d7037586789b43f035236a2e6fbd4c62",
+          "sourceUrl": "https://fonts.gstatic.com/s/inter/v20/UcC73FwrK3iLTeHuS_nVMrMxCp50SjIa1ZL7.woff2",
+          "weight": "400 700",
+          "style": "normal",
+          "unicodeRange": "U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD"
+        }
+      ]
+    },
+    {
+      "id": "source-sans-3",
+      "family": "Source Sans 3",
+      "stylesheetUrl": "https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@400..700&display=swap",
+      "stylesheetSha256": "bd7a7bccc7fe52ba9709abc9f5b8c60c16a2f715478f2d9f6188073842f55770",
+      "license": {
+        "spdx": "OFL-1.1",
+        "sourceUrl": "https://raw.githubusercontent.com/google/fonts/51303ca9e8ac9dcea7b12d307ba568fd0e6fcfca/ofl/sourcesans3/OFL.txt",
+        "file": "source-sans-3-OFL.txt",
+        "sha256": "09746787287a289323b0ec3cff4d1a4a801331b82b7207c1e186f5d26619a392"
+      },
+      "assets": [
+        {
+          "subset": "latin-ext",
+          "file": "source-sans-3-latin-ext-a85a7459bdb3.woff2",
+          "bytes": 60088,
+          "sha256": "a85a7459bdb3cdc1136751e151a506bae653fc29ada3ca86237477df6f1b59e6",
+          "sourceUrl": "https://fonts.gstatic.com/s/sourcesans3/v20/nwpStKy2OAdR1K-IwhWudF-R3wEaZfrc.woff2",
+          "weight": "400 700",
+          "style": "normal",
+          "unicodeRange": "U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF"
+        },
+        {
+          "subset": "latin",
+          "file": "source-sans-3-latin-19143dca0759.woff2",
+          "bytes": 28872,
+          "sha256": "19143dca075972bc84e3fd9eab7416dd40cc565dccb2435a044bdfabe060c7d5",
+          "sourceUrl": "https://fonts.gstatic.com/s/sourcesans3/v20/nwpStKy2OAdR1K-IwhWudF-R3w8aZQ.woff2",
+          "weight": "400 700",
+          "style": "normal",
+          "unicodeRange": "U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD"
+        }
+      ]
+    },
+    {
+      "id": "manrope",
+      "family": "Manrope",
+      "stylesheetUrl": "https://fonts.googleapis.com/css2?family=Manrope:wght@400..700&display=swap",
+      "stylesheetSha256": "11d8dcdcaa1757ca2774e21e8f0f76f8a69ed8e2329a5fd9e39edc77013cec2e",
+      "license": {
+        "spdx": "OFL-1.1",
+        "sourceUrl": "https://raw.githubusercontent.com/google/fonts/51303ca9e8ac9dcea7b12d307ba568fd0e6fcfca/ofl/manrope/OFL.txt",
+        "file": "manrope-OFL.txt",
+        "sha256": "58172e0c0fac2cda8a37b348164bb55e44b0e69051e557e92b1d3f6910141f7b"
+      },
+      "assets": [
+        {
+          "subset": "latin-ext",
+          "file": "manrope-latin-ext-3911b66d9f2e.woff2",
+          "bytes": 15120,
+          "sha256": "3911b66d9f2e005a4b989223405d0e5032619c668597ba467cc76a23c8fffcfb",
+          "sourceUrl": "https://fonts.gstatic.com/s/manrope/v20/xn7gYHE41ni1AdIRggmxSuXd.woff2",
+          "weight": "400 700",
+          "style": "normal",
+          "unicodeRange": "U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF"
+        },
+        {
+          "subset": "latin",
+          "file": "manrope-latin-a30ddcd34970.woff2",
+          "bytes": 24836,
+          "sha256": "a30ddcd349703aff7464c34bef3fffdff405ee50c113440d7c8693c02d210972",
+          "sourceUrl": "https://fonts.gstatic.com/s/manrope/v20/xn7gYHE41ni1AdIRggexSg.woff2",
+          "weight": "400 700",
+          "style": "normal",
+          "unicodeRange": "U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD"
+        }
+      ]
+    },
+    {
+      "id": "dm-sans",
+      "family": "DM Sans",
+      "stylesheetUrl": "https://fonts.googleapis.com/css2?family=DM+Sans:wght@400..700&display=swap",
+      "stylesheetSha256": "a952281454d45e3b4eee01b8f434589a3a01dca73e093c840be7be0072e92412",
+      "license": {
+        "spdx": "OFL-1.1",
+        "sourceUrl": "https://raw.githubusercontent.com/google/fonts/51303ca9e8ac9dcea7b12d307ba568fd0e6fcfca/ofl/dmsans/OFL.txt",
+        "file": "dm-sans-OFL.txt",
+        "sha256": "9af36190332437f5ecd09974de43c1f7c77a310a996cdd8ceb25628b458840e1"
+      },
+      "assets": [
+        {
+          "subset": "latin-ext",
+          "file": "dm-sans-latin-ext-a5d38fe99f93.woff2",
+          "bytes": 18228,
+          "sha256": "a5d38fe99f930275684999b462c7123faa063d9e44e73b4b241723d884aa0f49",
+          "sourceUrl": "https://fonts.gstatic.com/s/dmsans/v17/rP2Yp2ywxg089UriI5-g4vlH9VoD8Cmcqbu6-K6h9Q.woff2",
+          "weight": "400 700",
+          "style": "normal",
+          "unicodeRange": "U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF"
+        },
+        {
+          "subset": "latin",
+          "file": "dm-sans-latin-9fea608a947e.woff2",
+          "bytes": 36932,
+          "sha256": "9fea608a947e67020c33cad9a6fe3d60c54119dfb8cff87768a8117a15ed7543",
+          "sourceUrl": "https://fonts.gstatic.com/s/dmsans/v17/rP2Yp2ywxg089UriI5-g4vlH9VoD8Cmcqbu0-K4.woff2",
+          "weight": "400 700",
+          "style": "normal",
+          "unicodeRange": "U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD"
+        }
+      ]
+    },
+    {
+      "id": "source-serif-4",
+      "family": "Source Serif 4",
+      "stylesheetUrl": "https://fonts.googleapis.com/css2?family=Source+Serif+4:wght@400..700&display=swap",
+      "stylesheetSha256": "fa1e12c8006f756c8594018f2e37416715b71e48d9c0ed4f9c0e82e41becf5c0",
+      "license": {
+        "spdx": "OFL-1.1",
+        "sourceUrl": "https://raw.githubusercontent.com/google/fonts/51303ca9e8ac9dcea7b12d307ba568fd0e6fcfca/ofl/sourceserif4/OFL.txt",
+        "file": "source-serif-4-OFL.txt",
+        "sha256": "5f94c3fd3a23131a417ab5a0c8452de57e70c3cfb9f604d88241f7065ebf9fd9"
+      },
+      "assets": [
+        {
+          "subset": "latin-ext",
+          "file": "source-serif-4-latin-ext-d10ccbbd0dc4.woff2",
+          "bytes": 42212,
+          "sha256": "d10ccbbd0dc4ebae2938958dc1f622a53460fe297e9c958564742dd684309c3f",
+          "sourceUrl": "https://fonts.gstatic.com/s/sourceserif4/v15/vEFF2_tTDB4M7-auWDN0ahZJW3IX2ih5nk3AucvUHf6kA3r4cXk.woff2",
+          "weight": "400 700",
+          "style": "normal",
+          "unicodeRange": "U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF"
+        },
+        {
+          "subset": "latin",
+          "file": "source-serif-4-latin-382475f38242.woff2",
+          "bytes": 50936,
+          "sha256": "382475f38242c52d42a3e5ff8dc69b5d73f10d0d21e4550b5fe232984688779a",
+          "sourceUrl": "https://fonts.gstatic.com/s/sourceserif4/v15/vEFF2_tTDB4M7-auWDN0ahZJW3IX2ih5nk3AucvUHf6kDXr4.woff2",
+          "weight": "400 700",
+          "style": "normal",
+          "unicodeRange": "U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD"
+        }
+      ]
+    },
+    {
+      "id": "lora",
+      "family": "Lora",
+      "stylesheetUrl": "https://fonts.googleapis.com/css2?family=Lora:wght@400..700&display=swap",
+      "stylesheetSha256": "8c5ddf6b8066137ddb09f647518d5e58a031e278388a3a3b44714b8197c974cf",
+      "license": {
+        "spdx": "OFL-1.1",
+        "sourceUrl": "https://raw.githubusercontent.com/google/fonts/51303ca9e8ac9dcea7b12d307ba568fd0e6fcfca/ofl/lora/OFL.txt",
+        "file": "lora-OFL.txt",
+        "sha256": "1d9a970809ac804b582a6ce7f0ebc4e7fefcbfd7ff6299cad35ee656a21be716"
+      },
+      "assets": [
+        {
+          "subset": "latin-ext",
+          "file": "lora-latin-ext-2a2d9c22c986.woff2",
+          "bytes": 20088,
+          "sha256": "2a2d9c22c9863086a23f5013fede1428585321812b25f2662542c39d02967c5e",
+          "sourceUrl": "https://fonts.gstatic.com/s/lora/v37/0QIvMX1D_JOuMwT7I-NP.woff2",
+          "weight": "400 700",
+          "style": "normal",
+          "unicodeRange": "U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF"
+        },
+        {
+          "subset": "latin",
+          "file": "lora-latin-ddb8c6603510.woff2",
+          "bytes": 37788,
+          "sha256": "ddb8c66035104e233fc024669183aad3738b6daa16deee2ebb1241bd0f98ace1",
+          "sourceUrl": "https://fonts.gstatic.com/s/lora/v37/0QIvMX1D_JOuMwr7Iw.woff2",
+          "weight": "400 700",
+          "style": "normal",
+          "unicodeRange": "U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD"
+        }
+      ]
+    },
+    {
+      "id": "noto-sans",
+      "family": "Noto Sans",
+      "stylesheetUrl": "https://fonts.googleapis.com/css2?family=Noto+Sans:wght@400..700&display=swap",
+      "stylesheetSha256": "b81c550f81a947b0217493e0ed021dbf63eade456fb68e2512bb48a53ac7c311",
+      "license": {
+        "spdx": "OFL-1.1",
+        "sourceUrl": "https://raw.githubusercontent.com/google/fonts/51303ca9e8ac9dcea7b12d307ba568fd0e6fcfca/ofl/notosans/OFL.txt",
+        "file": "noto-sans-OFL.txt",
+        "sha256": "cee9892f9f0cc8fe882c9e9537ee6a89621d86ee7ceaf70b02e2b2b1c25c061a"
+      },
+      "assets": [
+        {
+          "subset": "latin-ext",
+          "file": "noto-sans-latin-ext-6d5a79315528.woff2",
+          "bytes": 167960,
+          "sha256": "6d5a79315528df191b9d86f97b0c4272a8b588fcb166773fe6588ac795de0613",
+          "sourceUrl": "https://fonts.gstatic.com/s/notosans/v42/o-0bIpQlx3QUlC5A4PNB6Ryti20_6n1iPHjc5aDdu2ui.woff2",
+          "weight": "400 700",
+          "style": "normal",
+          "unicodeRange": "U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF"
+        },
+        {
+          "subset": "latin",
+          "file": "noto-sans-latin-51ca196f49a3.woff2",
+          "bytes": 35820,
+          "sha256": "51ca196f49a33e79e7870ff88ebd2829a3f627a51e7d690986618f0e7ad2b52d",
+          "sourceUrl": "https://fonts.gstatic.com/s/notosans/v42/o-0bIpQlx3QUlC5A4PNB6Ryti20_6n1iPHjc5a7duw.woff2",
+          "weight": "400 700",
+          "style": "normal",
+          "unicodeRange": "U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD"
+        }
+      ]
+    },
+    {
+      "id": "noto-sans-devanagari",
+      "family": "Noto Sans Devanagari",
+      "stylesheetUrl": "https://fonts.googleapis.com/css2?family=Noto+Sans+Devanagari:wght@400..700&display=swap",
+      "stylesheetSha256": "43e8dba3f0265caa86b0b3039b9c72fdb92d574e7be637fff33bf02d86647df7",
+      "license": {
+        "spdx": "OFL-1.1",
+        "sourceUrl": "https://raw.githubusercontent.com/google/fonts/51303ca9e8ac9dcea7b12d307ba568fd0e6fcfca/ofl/notosansdevanagari/OFL.txt",
+        "file": "noto-sans-devanagari-OFL.txt",
+        "sha256": "a216f6f8d85c7228093e0ee5e258d9d377e6671f68acb4db1930b29583d0f331"
+      },
+      "assets": [
+        {
+          "subset": "devanagari",
+          "file": "noto-sans-devanagari-devanagari-3b3cae4d2600.woff2",
+          "bytes": 121192,
+          "sha256": "3b3cae4d2600cb502286577fcfbc7f0caa05d9bb3c28d6699aeb56302d35e730",
+          "sourceUrl": "https://fonts.gstatic.com/s/notosansdevanagari/v30/TuG7UUFzXI5FBtUq5a8bjKYTZjtRU6Sgv3NaV_SNmI0b8QQCQmHN5TV_9qo.woff2",
+          "weight": "400 700",
+          "style": "normal",
+          "unicodeRange": "U+0900-097F, U+1CD0-1CF4, U+1CF7-1CF9, U+200C-200D, U+20A8, U+20B9, U+20F0, U+25CC, U+A830-A839, U+A8E0-A8FF, U+11B00-11B0A"
+        },
+        {
+          "subset": "latin-ext",
+          "file": "noto-sans-devanagari-latin-ext-abb6f723e7ef.woff2",
+          "bytes": 13852,
+          "sha256": "abb6f723e7ef4a6f9784d3b50533007f49609231bb872a205c2bfb6e7d43e6ee",
+          "sourceUrl": "https://fonts.gstatic.com/s/notosansdevanagari/v30/TuG7UUFzXI5FBtUq5a8bjKYTZjtRU6Sgv3NaV_SNmI0b8QQCQmHN6jV_9qo.woff2",
+          "weight": "400 700",
+          "style": "normal",
+          "unicodeRange": "U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF"
+        },
+        {
+          "subset": "latin",
+          "file": "noto-sans-devanagari-latin-531d2365a3db.woff2",
+          "bytes": 25384,
+          "sha256": "531d2365a3dbd2daccb336430f40be4af31203a7d3f20c12513dca3012ad572b",
+          "sourceUrl": "https://fonts.gstatic.com/s/notosansdevanagari/v30/TuG7UUFzXI5FBtUq5a8bjKYTZjtRU6Sgv3NaV_SNmI0b8QQCQmHN5DV_.woff2",
+          "weight": "400 700",
+          "style": "normal",
+          "unicodeRange": "U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD"
+        }
+      ]
+    },
+    {
+      "id": "noto-sans-gurmukhi",
+      "family": "Noto Sans Gurmukhi",
+      "stylesheetUrl": "https://fonts.googleapis.com/css2?family=Noto+Sans+Gurmukhi:wght@400..700&display=swap",
+      "stylesheetSha256": "33ddbdc795a6401b3c63df32b4a56dc88adf38036609a07981800cfdcda7c8f6",
+      "license": {
+        "spdx": "OFL-1.1",
+        "sourceUrl": "https://raw.githubusercontent.com/google/fonts/51303ca9e8ac9dcea7b12d307ba568fd0e6fcfca/ofl/notosansgurmukhi/OFL.txt",
+        "file": "noto-sans-gurmukhi-OFL.txt",
+        "sha256": "3f7451b7e2c8381be0c5712f7b0dd5c2d75fe787ae16a99f18b7fa45627a0fde"
+      },
+      "assets": [
+        {
+          "subset": "gurmukhi",
+          "file": "noto-sans-gurmukhi-gurmukhi-fc4c2bf6b738.woff2",
+          "bytes": 33824,
+          "sha256": "fc4c2bf6b7387ce4b0a6b7d38c459fb50c31680a3148c186123af49cf73b2bfa",
+          "sourceUrl": "https://fonts.gstatic.com/s/notosansgurmukhi/v29/w8gyH3EvQP81sInb43inmyN9zZ7hb7ATbSWo4q8dJ74a3cVrSnsXn2CP.woff2",
+          "weight": "400 700",
+          "style": "normal",
+          "unicodeRange": "U+0951-0952, U+0964-0965, U+0A01-0A76, U+200C-200D, U+20B9, U+25CC, U+262C, U+A830-A839"
+        },
+        {
+          "subset": "latin-ext",
+          "file": "noto-sans-gurmukhi-latin-ext-a6860f34dad0.woff2",
+          "bytes": 17456,
+          "sha256": "a6860f34dad091c0d5857f745ff32a2f931703cf248b6d845778c4815619bf2f",
+          "sourceUrl": "https://fonts.gstatic.com/s/notosansgurmukhi/v29/w8gyH3EvQP81sInb43inmyN9zZ7hb7ATbSWo4q8dJ74a3cVrSlYXn2CP.woff2",
+          "weight": "400 700",
+          "style": "normal",
+          "unicodeRange": "U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF"
+        },
+        {
+          "subset": "latin",
+          "file": "noto-sans-gurmukhi-latin-7e170a4f479b.woff2",
+          "bytes": 31304,
+          "sha256": "7e170a4f479bab1536c70aa6d19b5e478715f24084d80b25da1b4e4449ce0042",
+          "sourceUrl": "https://fonts.gstatic.com/s/notosansgurmukhi/v29/w8gyH3EvQP81sInb43inmyN9zZ7hb7ATbSWo4q8dJ74a3cVrSlgXnw.woff2",
+          "weight": "400 700",
+          "style": "normal",
+          "unicodeRange": "U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD"
+        }
+      ]
+    }
+  ]
+}

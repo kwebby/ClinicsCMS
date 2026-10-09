@@ -1,0 +1,201 @@
+# Author: ramanpal singh | URL: https://kwebby.com
+name: clinic-cms
+x-app: &app
+  build:
+    context: ..
+    dockerfile: deploy/Dockerfile
+    target: application
+  image: clinic-cms:${APP_VERSION:-0.1.0}
+  restart: unless-stopped
+  init: true
+  environment: &app-env
+    NODE_ENV: production
+    API_PORT: 4000
+    API_HOST: 0.0.0.0
+    TRUST_PROXY_HOPS: 1
+    API_INTERNAL_URL: http://api:4000
+    REDIS_URL: redis://:${VALKEY_PASSWORD:-}@valkey:6379
+    PRIVATE_STORAGE_ROOT: /data
+    PDF_RENDERER_SOCKET: /run/clinic-pdf/renderer.sock
+    ANALYZER_SOCKET: /run/clinic-analyzer/analyzer.sock
+    PUBLIC_URL: ${PUBLIC_URL:?Set PUBLIC_URL}
+    ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:?Set ALLOWED_ORIGINS}
+    DATABASE_DRIVER: ${DATABASE_DRIVER:-postgres}
+    DATABASE_URL: ${DATABASE_URL:-}
+    APP_ENCRYPTION_KEY: ${APP_ENCRYPTION_KEY:?Set APP_ENCRYPTION_KEY}
+    BOOTSTRAP_TOKEN: ${BOOTSTRAP_TOKEN:-}
+    ORGANIZATION_ID: ${ORGANIZATION_ID:-clinic}
+    INSTALLATION_ID: ${INSTALLATION_ID:-clinic}
+    INSTALLATION_AUDIENCE: ${INSTALLATION_AUDIENCE:-patient}
+    FIREBASE_PROJECT_ID: ${FIREBASE_PROJECT_ID:-}
+    FIREBASE_DATABASE_ID: ${FIREBASE_DATABASE_ID:-(default)}
+    REGISTRATION_ENABLED: ${REGISTRATION_ENABLED:-true}
+    REQUIRE_STAFF_MFA: "true"
+    OUTBOUND_WORKERS_ENABLED: ${OUTBOUND_WORKERS_ENABLED:-false}
+    MAINTENANCE_MODE: ${MAINTENANCE_MODE:-false}
+    OPENAPI_ENABLED: ${OPENAPI_ENABLED:-false}
+    AI_ALLOWED_HOSTS: ${AI_ALLOWED_HOSTS:-api.openai.com}
+  volumes:
+    - files:/data
+    - pdf-socket:/run/clinic-pdf
+    - analyzer-socket:/run/clinic-analyzer
+  read_only: true
+  tmpfs:
+    - /tmp:rw,noexec,nosuid,size=128m
+  security_opt:
+    - no-new-privileges:true
+  cap_drop: [ALL]
+  networks: [backend, egress]
+services:
+  api:
+    <<: *app
+    networks: [frontend, backend, egress]
+    command: [node, dist/apps/api/src/main.js]
+    depends_on:
+      valkey: {condition: service_healthy}
+      clamav: {condition: service_started}
+      pdf-worker: {condition: service_started}
+      analyzer-worker: {condition: service_started}
+    healthcheck:
+      test: [CMD, node, -e, "fetch('http://127.0.0.1:4000/api/v1/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 20s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+  web:
+    build: {context: .., dockerfile: deploy/Dockerfile, target: web}
+    image: clinic-cms-web:${APP_VERSION:-0.1.0}
+    restart: unless-stopped
+    init: true
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      HOSTNAME: 0.0.0.0
+      API_INTERNAL_URL: http://api:4000
+      PUBLIC_URL: ${PUBLIC_URL:?Set PUBLIC_URL}
+      NEXT_TELEMETRY_DISABLED: 1
+    read_only: true
+    tmpfs: [/tmp, /app/apps/web/.next/cache]
+    security_opt: [no-new-privileges:true]
+    cap_drop: [ALL]
+    networks: [frontend]
+    depends_on: [api]
+  worker:
+    <<: *app
+    command: [node, dist/apps/worker/src/main.js]
+    depends_on:
+      valkey: {condition: service_healthy}
+  pdf-worker:
+    build: {context: .., dockerfile: deploy/Dockerfile, target: pdf}
+    image: clinic-cms-pdf:${APP_VERSION:-0.1.0}
+    restart: unless-stopped
+    init: true
+    environment:
+      NODE_ENV: production
+      PDF_RENDERER_SOCKET: /run/clinic-pdf/renderer.sock
+      # Container has no network, credentials, app data, or writable host filesystem.
+      PDF_CHROMIUM_SANDBOX: "false"
+    volumes: [pdf-socket:/run/clinic-pdf]
+    network_mode: none
+    read_only: true
+    tmpfs: [/tmp:size=256m]
+    shm_size: 256mb
+    mem_limit: 1g
+    pids_limit: 128
+    security_opt: [no-new-privileges:true]
+    cap_drop: [ALL]
+  analyzer-worker:
+    image: clinic-cms:${APP_VERSION:-0.1.0}
+    build: {context: .., dockerfile: deploy/Dockerfile, target: application}
+    restart: unless-stopped
+    init: true
+    command: [node, dist/packages/platform/src/analyzer-worker.js]
+    environment:
+      NODE_ENV: production
+      ANALYZER_SOCKET: /run/clinic-analyzer/analyzer.sock
+    volumes: [analyzer-socket:/run/clinic-analyzer]
+    read_only: true
+    tmpfs: [/tmp:size=16m]
+    mem_limit: 256m
+    pids_limit: 64
+    security_opt: [no-new-privileges:true]
+    cap_drop: [ALL]
+    networks: [analyzer-egress]
+  valkey:
+    image: valkey/valkey:8.1.10-alpine@sha256:081c2f5cb575efc901aa80ff9cdbd1ec6a301682fd35e1ebb4b0990a4a4a8507
+    restart: unless-stopped
+    environment:
+      VALKEY_PASSWORD: ${VALKEY_PASSWORD:-}
+      REDISCLI_AUTH: ${VALKEY_PASSWORD:-}
+    command: [sh, -ec, 'test -n "$$VALKEY_PASSWORD"; exec valkey-server --appendonly yes --appendfsync everysec --maxmemory-policy noeviction --requirepass "$$VALKEY_PASSWORD"']
+    volumes: [valkey:/data]
+    networks: [backend]
+    healthcheck: {test: [CMD, valkey-cli, ping], interval: 10s, timeout: 3s, retries: 10}
+  clamav:
+    image: clamav/clamav:1.5.4-debian@sha256:9bb8712a50f0e75166e936c452cd82dd5e5be0b85586598930b5bbb84a99a578
+    restart: unless-stopped
+    volumes: [clamav:/var/lib/clamav]
+    networks: [backend, egress]
+    mem_limit: 2g
+  postgres:
+    profiles: [postgres]
+    image: postgres:17.11-bookworm@sha256:3645570cccdfa447589da9f57dd740faa29b30938e861289a5574b6ca6b03826
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: clinic
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_ADMIN_PASSWORD:-}
+      APP_DATABASE_PASSWORD: ${DATABASE_PASSWORD:-}
+    command: [postgres, -c, wal_level=replica, -c, archive_mode=on, -c, "archive_command=test ! -f /var/lib/postgresql/data/wal-archive/%f && cp %p /var/lib/postgresql/data/wal-archive/%f", -c, archive_timeout=900]
+    volumes: [postgres:/var/lib/postgresql/data, ./postgres/init-wal.sh:/docker-entrypoint-initdb.d/001-wal.sh:ro, ./postgres/init-app.sh:/docker-entrypoint-initdb.d/002-app.sh:ro]
+    networks: [backend]
+    healthcheck: {test: [CMD-SHELL, 'pg_isready -U clinic -d clinic'], interval: 10s, timeout: 3s, retries: 10}
+  mysql:
+    profiles: [mysql]
+    image: mysql:8.4.11@sha256:6ea90827b1100f8f2ae306a539f86d2c264a26ed435a2a9f75551dd5c3aeb242
+    restart: unless-stopped
+    environment:
+      MYSQL_DATABASE: clinic
+      MYSQL_USER: clinic
+      MYSQL_PASSWORD: ${DATABASE_PASSWORD:-}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-}
+    command: [--log-bin=mysql-bin, --binlog-format=ROW, --binlog-expire-logs-seconds=604800]
+    volumes: [mysql:/var/lib/mysql]
+    networks: [backend]
+    healthcheck: {test: [CMD-SHELL, 'mysqladmin ping -h localhost --silent'], interval: 10s, timeout: 3s, retries: 10}
+  nginx:
+    profiles: [nginx]
+    image: nginx:1.30.5@sha256:9bf97bd7714f5e24c1ccd545ecb9eb5435cb6d109c97cebb15e7e455e0239edb
+    restart: unless-stopped
+    ports: ['80:80', '443:443']
+    environment:
+      CLINIC_DOMAIN: ${CLINIC_DOMAIN:?Set CLINIC_DOMAIN}
+    volumes: [./nginx/clinic.conf.template:/etc/nginx/templates/default.conf.template:ro, ./certificates:/etc/clinic/tls:ro]
+    networks: [frontend, egress]
+    depends_on: [api, web]
+  apache:
+    profiles: [apache]
+    image: httpd:2.4.69@sha256:c842ac797bd1fe8b3cd26d002ac9d948aa2814097544600600b35aef42e6785a
+    restart: unless-stopped
+    ports: ['80:80', '443:443']
+    environment:
+      CLINIC_DOMAIN: ${CLINIC_DOMAIN:?Set CLINIC_DOMAIN}
+    volumes: [./apache/httpd.conf:/usr/local/apache2/conf/httpd.conf:ro, ./certificates:/etc/clinic/tls:ro]
+    networks: [frontend, egress]
+    depends_on: [api, web]
+networks:
+  frontend: {internal: true}
+  backend: {internal: true}
+  egress: {}
+  analyzer-egress:
+    enable_ipv6: false
+    ipam:
+      config: [{subnet: "${ANALYZER_SUBNET:-172.30.240.0/28}"}]
+volumes:
+  files: {}
+  pdf-socket: {}
+  analyzer-socket: {}
+  valkey: {}
+  clamav: {}
+  postgres: {}
+  mysql: {}

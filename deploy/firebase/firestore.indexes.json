@@ -1,0 +1,711 @@
+{
+  "indexes": [
+    {
+      "collectionGroup": "clinic_appointments",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "organizationId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "doctorId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "__name__",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "clinic_appointments",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "organizationId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "patientId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "__name__",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "clinic_availability",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "organizationId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "public",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "__name__",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "clinic_availability",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "organizationId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "doctorId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "public",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "__name__",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "clinic_availability",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "organizationId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "doctorId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "branchId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "__name__",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "clinic_leave",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "organizationId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "userId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "__name__",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "clinic_leave",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "organizationId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "status",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "__name__",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "clinic_employees",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "organizationId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "userId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "__name__",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "clinic_services",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "organizationId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "public",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "__name__",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "clinic_payroll",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "organizationId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "branchId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "period",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "__name__",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "clinic_revisions",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "organizationId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "collection",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "recordId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "__name__",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "clinic_pageRoutes",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "organizationId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "slug",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "__name__",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "clinic_pageRoutes",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "organizationId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "slug",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "locale",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "__name__",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "clinic_paymentAttempts",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "organizationId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "invoiceId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "__name__",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "clinic_paymentAttempts",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "organizationId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "provider",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "providerReference",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "__name__",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "clinic_payments",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "organizationId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "method",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "providerReference",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "__name__",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "clinic_payments",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "organizationId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "invoiceId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "__name__",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "clinic_refundRequests",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "organizationId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "paymentId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "__name__",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "clinic_users",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "organizationId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "status",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "__name__",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "clinic_outbox",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "organizationId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "status",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "__name__",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "clinic_outbox",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "organizationId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "type",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "__name__",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "clinic_notifications",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "organizationId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "userId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "__name__",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "clinic_consents",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "organizationId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "patientId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "__name__",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "clinic_tasks",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "organizationId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "assignedTo",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "__name__",
+          "order": "ASCENDING"
+        }
+      ]
+    }
+  ],
+  "fieldOverrides": [
+    {
+      "collectionGroup": "clinic_patients",
+      "fieldPath": "_payload",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "clinic_appointments",
+      "fieldPath": "_payload",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "clinic_encounters",
+      "fieldPath": "_payload",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "clinic_prescriptions",
+      "fieldPath": "_payload",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "clinic_results",
+      "fieldPath": "_payload",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "clinic_referrals",
+      "fieldPath": "_payload",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "clinic_tasks",
+      "fieldPath": "_payload",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "clinic_leads",
+      "fieldPath": "_payload",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "clinic_employees",
+      "fieldPath": "_payload",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "clinic_invoices",
+      "fieldPath": "_payload",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "clinic_payments",
+      "fieldPath": "_payload",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "clinic_refunds",
+      "fieldPath": "_payload",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "clinic_payroll",
+      "fieldPath": "_payload",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "clinic_documents",
+      "fieldPath": "_payload",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "clinic_pages",
+      "fieldPath": "_payload",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "clinic_templates",
+      "fieldPath": "_payload",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "clinic_themes",
+      "fieldPath": "_payload",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "clinic_publications",
+      "fieldPath": "_payload",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "clinic_conversations",
+      "fieldPath": "_payload",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "clinic_messages",
+      "fieldPath": "_payload",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "clinic_notifications",
+      "fieldPath": "_payload",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "clinic_consents",
+      "fieldPath": "_payload",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "clinic_settings",
+      "fieldPath": "_payload",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "clinic_availability",
+      "fieldPath": "_payload",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "clinic_leave",
+      "fieldPath": "_payload",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "clinic_services",
+      "fieldPath": "_payload",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "clinic_users",
+      "fieldPath": "_payload",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "clinic_userEmails",
+      "fieldPath": "_payload",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "clinic_sessions",
+      "fieldPath": "_payload",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "clinic_invitations",
+      "fieldPath": "_payload",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "clinic_authTokens",
+      "fieldPath": "_payload",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "clinic_files",
+      "fieldPath": "_payload",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "clinic_audit",
+      "fieldPath": "_payload",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "clinic_outbox",
+      "fieldPath": "_payload",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "clinic_integrations",
+      "fieldPath": "_payload",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "clinic_preferences",
+      "fieldPath": "_payload",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "clinic_revisions",
+      "fieldPath": "_payload",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "clinic_pageRoutes",
+      "fieldPath": "_payload",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "clinic_counters",
+      "fieldPath": "_payload",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "clinic_creditNotes",
+      "fieldPath": "_payload",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "clinic_paymentAttempts",
+      "fieldPath": "_payload",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "clinic_refundRequests",
+      "fieldPath": "_payload",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "clinic_webhookEvents",
+      "fieldPath": "_payload",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "clinic_publicAssets",
+      "fieldPath": "_payload",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "clinic_aiDrafts",
+      "fieldPath": "_payload",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "clinic_aiUsage",
+      "fieldPath": "_payload",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "clinic_certificationProbe",
+      "fieldPath": "_payload",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "clinic_notificationDeliveries",
+      "fieldPath": "_payload",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "clinic_mailDeliveries",
+      "fieldPath": "_payload",
+      "indexes": []
+    }
+  ]
+}

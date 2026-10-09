@@ -1,0 +1,13 @@
+# Author: ramanpal singh | URL: https://kwebby.com
+# Read-only credentials are mounted into API/worker only. No credentials enter an image.
+services:
+  api:
+    environment:
+      GOOGLE_APPLICATION_CREDENTIALS: /run/secrets/firebase.json
+    volumes:
+      - ${FIREBASE_CREDENTIALS_FILE:?Set an absolute FIREBASE_CREDENTIALS_FILE path}:/run/secrets/firebase.json:ro
+  worker:
+    environment:
+      GOOGLE_APPLICATION_CREDENTIALS: /run/secrets/firebase.json
+    volumes:
+      - ${FIREBASE_CREDENTIALS_FILE:?Set an absolute FIREBASE_CREDENTIALS_FILE path}:/run/secrets/firebase.json:ro

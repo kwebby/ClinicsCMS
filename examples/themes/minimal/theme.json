@@ -1,0 +1,37 @@
+{
+  "formatVersion": 1,
+  "name": "ClinicsCMS Minimal",
+  "slug": "clinicscms-minimal",
+  "version": "1.0.0",
+  "description": "A small, portable starting point for a clinic website.",
+  "author": "ramanpal singh | https://kwebby.com",
+  "license": "MIT",
+  "tokens": {
+    "primary": "#176A5A",
+    "secondary": "#E2F1EA",
+    "background": "#FFFFFF",
+    "text": "#18362E",
+    "muted": "#546A63",
+    "radius": 12,
+    "fontFamily": "sans",
+    "baseFontSize": 16,
+    "maxWidth": 1200
+  },
+  "layouts": {
+    "home": [
+      { "id": "welcome", "type": "hero", "variant": "split", "heading": "Welcome to our clinic", "text": "Explore our services and arrange your next visit." },
+      { "id": "care", "type": "services", "heading": "Care at our clinic" },
+      { "id": "visit", "type": "contact", "heading": "Plan your visit" }
+    ],
+    "page": [],
+    "article": [],
+    "service": [],
+    "doctor": [],
+    "contact": [],
+    "tool": []
+  },
+  "navigation": [
+    { "label": "Services", "href": "/services" },
+    { "label": "Contact", "href": "/contact" }
+  ]
+}

@@ -1,0 +1,13 @@
+.env*
+.runtime
+node_modules
+**/node_modules
+**/.next
+dist
+.git
+coverage
+playwright-report
+test-results
+*.tsbuildinfo
+deploy/certificates
+deploy/secrets

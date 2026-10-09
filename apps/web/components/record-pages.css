@@ -1,0 +1,16 @@
+/* Author: ramanpal singh | URL: https://kwebby.com */
+.record-breadcrumbs{display:flex;flex-wrap:wrap;gap:10px;align-items:center;font-size:12px;margin-bottom:20px;color:var(--muted)}
+.record-breadcrumbs a{color:var(--green);text-decoration:underline;text-underline-offset:4px;overflow-wrap:anywhere}
+.record-page{padding:28px;max-width:1150px;margin-bottom:24px;min-width:0}
+.record-page .record-form{padding:0}.record-page .detail-meta{padding:0 0 20px;border-bottom:1px solid var(--line);flex-wrap:wrap}.record-page .detail-meta code{overflow-wrap:anywhere}
+.record-page .detail-actions{padding:20px 0;display:flex;gap:10px;flex-wrap:wrap}
+.record-page .form-footer{position:static;padding:20px 0 0;margin-top:22px;flex-wrap:wrap;border-top:1px solid var(--line);background:transparent}
+.record-page .detail-grid{padding:0}.record-page .detail-grid>div{min-width:0}.record-page .json-value{max-height:360px;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere}.record-page dd{overflow-wrap:anywhere}
+.record-page .revision-history h2{font-size:17px;margin-bottom:15px}.record-page details{margin:20px 0}.record-page summary{cursor:pointer;color:var(--green)}
+.action-page{max-width:880px}.page-cancel{display:inline-flex;margin-top:22px}
+.inline-decision{padding:18px;border:1px solid #d8b779;border-radius:8px;background:#fffcf5;display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-top:18px}.inline-decision p{flex-basis:100%;margin:0}
+.view-switcher{display:flex;gap:5px;align-items:center;flex-wrap:wrap;padding:4px;width:max-content;max-width:100%;background:#edf2ef;border:1px solid var(--line);border-radius:9px;margin:-6px 0 20px}
+.view-switcher a{display:flex;gap:8px;align-items:center;border-radius:6px;padding:9px 15px;color:var(--muted);font-size:12px;font-weight:500}.view-switcher a[aria-current=page]{background:white;color:var(--green);box-shadow:0 1px 4px #183b2912}
+.table-actions{display:flex;align-items:center;gap:10px;flex-wrap:wrap;min-width:100px;max-width:280px}.table-actions .text-button{font-size:11px;white-space:nowrap}.inline-status{max-width:190px;background:#fff;border:1px solid #cfddd5;padding:8px 10px;border-radius:6px;font-size:11px;color:var(--green);min-height:35px}.row-error{display:block;flex-basis:100%;color:var(--danger);font-size:11px;white-space:normal}.record-list-panel{min-width:0}
+.record-list-panel .data-toolbar{flex-wrap:wrap}.record-list-panel .data-toolbar .tabs{flex-wrap:wrap}.record-page .writing-surface{width:100%;min-width:0}
+@media(max-width:760px){.record-page{padding:18px}.record-breadcrumbs{font-size:11px;margin-bottom:16px}.record-page .detail-grid{grid-template-columns:1fr}.record-page .form-footer>span{flex-basis:100%}.record-page .form-footer .button{flex:1}.record-page .form-grid{grid-template-columns:1fr}.record-page .revision-row{flex-wrap:wrap;align-items:flex-start}.view-switcher{margin-top:0}.view-switcher a{padding:9px 12px}.record-list-panel .data-toolbar .search-input{max-width:100%;width:100%}.record-list-panel .data-toolbar .tabs{width:100%;overflow:visible}.record-page .detail-actions .button{font-size:11px}}

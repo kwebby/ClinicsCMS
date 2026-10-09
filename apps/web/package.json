@@ -1,0 +1,34 @@
+{
+  "name": "@clinic/web",
+  "private": true,
+  "version": "0.1.0",
+  "scripts": {
+    "dev": "next dev --webpack --port 3000",
+    "build": "next build --webpack && node ../../scripts/prepare-web.mjs",
+    "start": "node .next/standalone/apps/web/server.js",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "next": "16.4.0",
+    "react": "19.3.0",
+    "react-dom": "19.3.0",
+    "@blocknote/core": "0.55.0",
+    "@blocknote/react": "0.55.0",
+    "@blocknote/shadcn": "0.55.0",
+    "socket.io-client": "4.8.1",
+    "server-only": "0.0.1",
+    "fflate": "0.8.3"
+  },
+  "devDependencies": {
+    "@types/react": "19.2.2",
+    "@types/react-dom": "19.2.2",
+    "@tailwindcss/postcss": "4.1.16",
+    "tailwindcss": "4.1.16",
+    "typescript": "5.9.3"
+  },
+  "author": {
+    "name": "ramanpal singh",
+    "url": "https://kwebby.com"
+  },
+  "license": "MIT"
+}

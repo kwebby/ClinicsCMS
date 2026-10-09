@@ -1,0 +1,6 @@
+/* Author: ramanpal singh | URL: https://kwebby.com */
+import { expect,test } from 'vitest';
+import { encodeFirestoreRecord,decodeFirestoreRecord } from '../../packages/persistence/src/firestore.js';
+import type { Entity } from '../../packages/contracts/src/index.js';
+test('Firestore envelope preserves nested BlockNote table cells while projecting query scalars',()=>{const row:Entity={id:'document-id',organizationId:'clinic',version:5,createdAt:'2026-10-09',updatedAt:'2026-10-09',patientId:'patient-id',active:true,empty:null,content:[{type:'table',content:{rows:[{cells:[[{type:'text',text:'one'}],[{type:'text',text:'two'}]]}]}}],snapshot:{lines:[['nested',null],['arrays',true]],total:'123.456'}};const encoded=encodeFirestoreRecord(row);expect(encoded.patientId).toBe('patient-id');expect(encoded.active).toBe(true);expect(encoded.empty).toBeNull();expect(encoded.content).toBeUndefined();expect(decodeFirestoreRecord(encoded)).toEqual(row);});
+test('legacy Firestore records remain readable before their next versioned update',()=>{const row:Entity={id:'legacy',organizationId:'clinic',version:1,createdAt:'2026-10-09',updatedAt:'2026-10-09',content:[{text:'legacy'}]};expect(decodeFirestoreRecord(row)).toEqual(row);});

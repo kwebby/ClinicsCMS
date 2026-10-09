@@ -1,0 +1,43 @@
+{
+  "formatVersion": 1,
+  "name": "ClinicsCMS Community",
+  "slug": "clinicscms-community",
+  "version": "1.0.0",
+  "description": "An example with an original geometric hero image, service and team lists, preparation tools and a booking invitation.",
+  "author": "ramanpal singh | https://kwebby.com",
+  "license": "MIT",
+  "tokens": {
+    "primary": "#245B50",
+    "secondary": "#D9EDE3",
+    "background": "#FAFCF8",
+    "text": "#172F29",
+    "muted": "#52675F",
+    "radius": 20,
+    "fontFamily": "serif",
+    "baseFontSize": 17,
+    "maxWidth": 1280
+  },
+  "layouts": {
+    "home": [
+      { "id": "welcome", "type": "hero", "variant": "split", "heading": "Your care, close to home", "text": "Meet our team, explore our services and prepare for a visit that works for you.", "image": "assets/clinic-welcome.png" },
+      { "id": "services", "type": "services", "variant": "default", "heading": "Find your next step", "text": "Our available services and current fees are shown below." },
+      { "id": "team", "type": "doctors", "heading": "Meet the care team", "text": "Learn about the clinicians who work at our clinic." },
+      { "id": "prepare", "type": "tool", "heading": "Prepare for your appointment" },
+      { "id": "visit", "type": "contact", "heading": "Visit our clinic", "text": "Contact reception for help arranging an appointment." },
+      { "id": "next-step", "type": "cta", "heading": "Ready to arrange a visit?", "text": "Request an appointment and our team will follow up." }
+    ],
+    "page": [],
+    "article": [],
+    "service": [],
+    "doctor": [],
+    "contact": [],
+    "tool": []
+  },
+  "navigation": [
+    { "label": "Our services", "href": "/services" },
+    { "label": "Our team", "href": "/doctors" },
+    { "label": "Visit tools", "href": "/tools" },
+    { "label": "Contact", "href": "/contact" }
+  ],
+  "preview": "assets/clinic-welcome.png"
+}

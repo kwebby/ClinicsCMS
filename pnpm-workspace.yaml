@@ -1,0 +1,19 @@
+# Author: ramanpal singh | URL: https://kwebby.com
+packages:
+  - apps/web
+allowBuilds:
+  '@firebase/util': false
+  '@scarf/scarf': false
+  esbuild: true
+  msgpackr-extract: false
+  protobufjs: false
+  sharp: true
+minimumReleaseAgeExclude:
+  - bullmq@6.3.12
+onlyBuiltDependencies:
+  - '@nestjs/core'
+  - esbuild
+  - sharp
+
+overrides:
+  shell-quote: 1.12.0

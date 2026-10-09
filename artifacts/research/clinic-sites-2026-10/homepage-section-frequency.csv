@@ -1,0 +1,20 @@
+category,label,sites,sample_size,percent
+hero,Introductory hero,24,24,100.0
+services,Services overview,22,24,91.7
+about,Clinic introduction / care model,19,24,79.2
+booking,Dedicated booking / next-step section,16,24,66.7
+locations_contact,Location / contact / directions,13,24,54.2
+benefits,Care benefits / differentiators,12,24,50.0
+testimonials,Patient testimonials / reviews,10,24,41.7
+team,Clinician / team introduction,9,24,37.5
+news,News / updates / media feature,9,24,37.5
+trust,Accreditation / press / credibility,7,24,29.2
+patient_resources,Patient information / health resources,6,24,25.0
+hours,Opening-hours block,5,24,20.8
+partners,Partner services,3,24,12.5
+faq,Frequently asked questions,3,24,12.5
+pricing,Fees / membership / payment,3,24,12.5
+process,Care / enrollment steps,1,24,4.2
+social,Social follow invitation,1,24,4.2
+corporate,Employer / corporate care,1,24,4.2
+newsletter,Newsletter sign-up,1,24,4.2

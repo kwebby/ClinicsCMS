@@ -1,0 +1,162 @@
+# Author: ramanpal singh | URL: https://kwebby.com
+name: ClinicsCMS verification
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      remote_backend:
+        type: choice
+        description: Run only against a separately provisioned disposable certification database
+        default: none
+        options: [none, supabase, firestore]
+permissions:
+  contents: read
+concurrency:
+  group: clinic-ci-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  application:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with: {fetch-depth: 0}
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444
+        with: {node-version: '24.21.0'}
+      - run: corepack enable && corepack prepare pnpm@11.22.0 --activate
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm typecheck
+      - run: pnpm deploy:verify
+      - run: pnpm test
+      - run: pnpm build
+        env:
+          API_INTERNAL_URL: http://127.0.0.1:4000
+          NEXT_TELEMETRY_DISABLED: '1'
+      - run: pnpm audit --prod --audit-level=high
+      - name: Check application dependency licenses
+        run: pnpm exec license-checker-rseidelsohn --production --excludePrivatePackages --onlyAllow 'MIT;Apache-2.0;BSD-2-Clause;BSD-3-Clause;ISC;0BSD;CC0-1.0;CC-BY-4.0;Unlicense;BlueOak-1.0.0;Python-2.0;MPL-2.0;OFL-1.1;LGPL-2.1-or-later;LGPL-3.0-or-later'
+      - name: Install checksum-verified security scanners
+        run: |
+          set -eu
+          curl --fail --location --retry 3 -o /tmp/gitleaks.tar.gz https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/gitleaks_8.30.1_linux_x64.tar.gz
+          echo '551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb  /tmp/gitleaks.tar.gz' | sha256sum --check
+          tar -xzf /tmp/gitleaks.tar.gz -C /tmp gitleaks
+          sudo install /tmp/gitleaks /usr/local/bin/gitleaks
+          curl --fail --location --retry 3 -o /tmp/trivy.tar.gz https://github.com/aquasecurity/trivy/releases/download/v0.75.0/trivy_0.75.0_Linux-64bit.tar.gz
+          echo 'c6e65abddb348e25f10549df887045629cf28cc72453cd1c63acb717316b3f3f  /tmp/trivy.tar.gz' | sha256sum --check
+          tar -xzf /tmp/trivy.tar.gz -C /tmp trivy
+          sudo install /tmp/trivy /usr/local/bin/trivy
+          command -v gitleaks
+          command -v trivy
+      - run: gitleaks git --redact --no-banner .
+      - run: trivy fs --scanners vuln,secret,misconfig --severity HIGH,CRITICAL --exit-code 1 --skip-dirs node_modules,.runtime .
+      - name: Build and scan application container
+        run: |
+          docker build -f deploy/Dockerfile --target application -t clinicscms:ci .
+          trivy image --severity HIGH,CRITICAL --exit-code 1 clinicscms:ci
+          trivy image --format cyclonedx --output application-sbom.json clinicscms:ci
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: application-sbom
+          path: application-sbom.json
+          if-no-files-found: error
+  sql-contracts:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: postgres17
+            driver: postgres
+            major: '17'
+            image: postgres:17.11-bookworm@sha256:3645570cccdfa447589da9f57dd740faa29b30938e861289a5574b6ca6b03826
+            port: 5432
+            url: postgresql://clinic:clinic-test-only@127.0.0.1:5432/clinic_test
+            health: pg_isready -U clinic -d clinic_test
+          - name: postgres18
+            driver: postgres
+            major: '18'
+            image: postgres:18.6-bookworm@sha256:afc7e2d441324c0388fa80c3d24f733b4194a4eb7f47dd8ee2b08eb1a24a647c
+            port: 5432
+            url: postgresql://clinic:clinic-test-only@127.0.0.1:5432/clinic_test
+            health: pg_isready -U clinic -d clinic_test
+          - name: mysql84
+            driver: mysql
+            major: '8.4'
+            image: mysql:8.4.11@sha256:6ea90827b1100f8f2ae306a539f86d2c264a26ed435a2a9f75551dd5c3aeb242
+            port: 3306
+            url: mysql://clinic:clinic-test-only@127.0.0.1:3306/clinic_test
+            health: mysqladmin ping -h 127.0.0.1 --silent
+    services:
+      database:
+        image: ${{ matrix.image }}
+        env:
+          POSTGRES_DB: clinic_test
+          POSTGRES_USER: clinic
+          POSTGRES_PASSWORD: clinic-test-only
+          MYSQL_DATABASE: clinic_test
+          MYSQL_USER: clinic
+          MYSQL_PASSWORD: clinic-test-only
+          MYSQL_ROOT_PASSWORD: root-test-only
+        ports:
+          - ${{ matrix.port }}:${{ matrix.port }}
+        options: --health-cmd="${{ matrix.health }}" --health-interval=5s --health-timeout=3s --health-retries=30
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444
+        with: {node-version: '24.21.0'}
+      - run: corepack enable && corepack prepare pnpm@11.22.0 --activate
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm test:contracts
+        env:
+          DATABASE_TEST_URL: ${{ matrix.url }}
+          DATABASE_TEST_DRIVER: ${{ matrix.driver }}
+          DATABASE_TEST_EXPECTED_MAJOR: ${{ matrix.major }}
+          DATABASE_TEST_CONFIRM: disposable
+  remote-contracts:
+    if: github.event_name == 'workflow_dispatch' && inputs.remote_backend != 'none'
+    runs-on: ubuntu-24.04
+    environment: disposable-certification
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444
+        with: {node-version: '24.21.0'}
+      - run: corepack enable && corepack prepare pnpm@11.22.0 --activate
+      - run: pnpm install --frozen-lockfile
+      - name: Certify disposable Supabase database
+        if: inputs.remote_backend == 'supabase'
+        run: |
+          test -n "$DATABASE_TEST_URL"
+          pnpm test:contracts
+        env:
+          DATABASE_TEST_URL: ${{ secrets.CERT_SUPABASE_URL }}
+          DATABASE_TEST_DRIVER: supabase
+          DATABASE_TEST_CONFIRM: disposable
+      - name: Certify disposable real Firestore database
+        if: inputs.remote_backend == 'firestore'
+        env:
+          FIREBASE_TEST_PROJECT_ID: ${{ secrets.CERT_FIREBASE_PROJECT_ID }}
+          FIREBASE_TEST_PROJECT_ALLOWLIST: ${{ secrets.CERT_FIREBASE_PROJECT_ID }}
+          FIREBASE_TEST_CONFIRM: disposable
+          GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.CERT_FIREBASE_SERVICE_ACCOUNT_JSON }}
+        run: |
+          set -eu
+          test -n "$FIREBASE_TEST_PROJECT_ID"
+          test -n "$GOOGLE_SERVICE_ACCOUNT_JSON"
+          export GOOGLE_APPLICATION_CREDENTIALS="$RUNNER_TEMP/clinic-certification-google.json"
+          python3 - <<'PY'
+          import json, os
+          path = os.environ['GOOGLE_APPLICATION_CREDENTIALS']
+          credentials = json.loads(os.environ['GOOGLE_SERVICE_ACCOUNT_JSON'])
+          if credentials.get('project_id') != os.environ['FIREBASE_TEST_PROJECT_ID']:
+              raise RuntimeError('Credential project must match disposable test project')
+          descriptor = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+          with os.fdopen(descriptor, 'w') as output:
+              json.dump(credentials, output)
+          PY
+          trap 'rm -f "$GOOGLE_APPLICATION_CREDENTIALS"' EXIT
+          pnpm test:contracts

@@ -1,0 +1,30 @@
+/* Author: ramanpal singh | URL: https://kwebby.com */
+'use client';
+import Link from 'next/link';
+import {usePathname} from 'next/navigation';
+import {createContext,useContext,useEffect,useState,useCallback} from 'react';
+import {websiteSettingsSchema,defaultHomepageSections,type WebsiteSettings} from '../../../packages/contracts/src/website';
+import {api,errorMessage} from '@/lib/api';
+import {draftIdentity,readMemoryDraft,writeMemoryDraft,removeMemoryDraft} from '@/lib/draft-memory';
+import type {RecordData} from '@/lib/types';
+import type {PublicSite} from '@/lib/public';
+import {useSession} from './session';
+import {Alert,Loading} from './ui';
+import './website-editor.css';
+
+const base='/workspace/website';
+export const websiteTabs=[['homepage','Homepage'],['branding','Colors & fonts'],['navigation','Header & footer'],['locations','Locations & NAP'],['seo','SEO & social'],['preview','Preview & publish']] as const;
+interface EditorContext {value:WebsiteSettings;setValue:(value:WebsiteSettings)=>void;site:PublicSite;busy:boolean;dirty:boolean;startUpload:()=>()=>void}
+const Context=createContext<EditorContext|null>(null);
+export function useWebsiteEditor(){const value=useContext(Context);if(!value)throw new Error('Website editor unavailable');return value;}
+export function WebsiteEditorLayout({children}:{children:React.ReactNode}){
+ const {session}=useSession(),path=usePathname();const [value,setValue]=useState<WebsiteSettings>();const [record,setRecord]=useState<RecordData|null>(null);const [site,setSite]=useState<PublicSite>();const [baseline,setBaseline]=useState('');const [busy,setBusy]=useState(false);const [error,setError]=useState('');const [message,setMessage]=useState('');const [reload,setReload]=useState(0);const [conflict,setConflict]=useState(false);const [expectedVersion,setExpectedVersion]=useState<number>();const [uploads,setUploads]=useState(0);const startUpload=useCallback(()=>{setUploads(n=>n+1);let released=false;return ()=>{if(!released){released=true;setUploads(n=>Math.max(0,n-1))}}},[]);
+ const identity=session?draftIdentity(session.user):'';const allowed=session?.user.roles.some(r=>['owner','admin','editor'].includes(r));
+ useEffect(()=>{if(!allowed)return;let cancelled=false;Promise.all([api<RecordData[]>('/records/settings'),api<PublicSite>('/public/site')]).then(([rows,publicSite])=>{if(cancelled)return;const r=rows.find(x=>x.key==='website')??null;const initial=(r?.value??{siteName:publicSite.name,origin:publicSite.url,description:publicSite.description,locale:publicSite.locale,socialHandles:{},navigation:[]}) as WebsiteSettings;const current=JSON.stringify(initial);const draft=readMemoryDraft(identity,'website-settings');setSite(publicSite);setRecord(r);setExpectedVersion(draft?draft.expectedVersion:r?.version);setBaseline(draft?.baseline??current);setValue(draft?draft.values as WebsiteSettings:initial);if(draft){if(draft.expectedVersion!==r?.version){setConflict(true);setError('A newer website draft exists. Your recovered edits are preserved here. Reload the saved draft before saving again.');}else setMessage('Recovered your unsaved website edits from this tab.')}}).catch(e=>setError(errorMessage(e)));return()=>{cancelled=true}},[allowed,identity,reload]);
+ const dirty=Boolean(value&&JSON.stringify(value)!==baseline);
+ useEffect(()=>{if(value&&dirty)writeMemoryDraft(identity,'website-settings',{values:value,baseline,expectedVersion});else if(value)removeMemoryDraft(identity,'website-settings')},[value,dirty,identity,baseline,expectedVersion]);
+ if(!allowed)return <Alert>Website settings are available to administrators and content editors.</Alert>;
+ async function save(){if(!value||conflict||uploads)return;setError('');setMessage('');const result=websiteSettingsSchema.safeParse(value);if(!result.success){setError(result.error.issues.map(i=>`${i.path.join('.')}: ${i.message}`).join(' · '));return;}setBusy(true);try{const saved=await api<RecordData>(`/records/settings${record?'/'+encodeURIComponent(record.id):''}`,{method:record?'PATCH':'POST',body:{key:'website',value:result.data,...(record?{expectedVersion}:{})}});setRecord(saved);setExpectedVersion(saved.version);setBaseline(JSON.stringify(saved.value));setValue(saved.value as WebsiteSettings);removeMemoryDraft(identity,'website-settings');setMessage('Website draft saved. Review the preview, then activate a theme to publish this revision.')}catch(e){setError(errorMessage(e))}finally{setBusy(false)}}
+ return <><div className="page-heading"><div><h1>Website settings</h1><p>Your clinic’s content, appearance, and local presence.</p></div><Link className="button secondary" href="/workspace/themes">Website themes</Link></div><nav className="website-settings-nav" aria-label="Website settings">{websiteTabs.map(([slug,label])=><Link key={slug} href={`${base}/${slug}`} aria-current={path.startsWith(`${base}/${slug}`)?'page':undefined}>{label}</Link>)}</nav>{error&&<Alert>{error}</Alert>}{message&&<Alert kind="success">{message}</Alert>}{!value||!site?error?<button className="button secondary" onClick={()=>{setError('');setReload(x=>x+1)}}>Retry loading website settings</button>:<Loading/>:<Context.Provider value={{value,setValue,site,busy,dirty,startUpload}}><div className="website-editor-content"><fieldset className="website-editable-fields" disabled={busy}>{children}</fieldset></div><div className="website-save-bar"><span role="status">{uploads?'Image upload in progress':dirty?'Unsaved changes':'Draft is saved'} · Publishing is a separate step</span><button className="button secondary" disabled={busy||uploads>0} onClick={()=>{removeMemoryDraft(identity,'website-settings');setValue(undefined);setConflict(false);setError('');setMessage('Saved draft reloaded.');setReload(x=>x+1)}}>Reload saved draft</button><button className="button primary" disabled={busy||!dirty||conflict||uploads>0} onClick={()=>void save()}>{busy?'Saving…':'Save website draft'}</button></div></Context.Provider>}</>;
+}
+export {base as websiteEditorPath,defaultHomepageSections};
