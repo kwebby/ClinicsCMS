@@ -2,7 +2,7 @@
 import { beforeEach, describe, expect, test } from 'vitest';
 import { ClinicService } from '../../packages/core/src/index.js';
 import type { Actor, Entity } from '../../packages/contracts/src/index.js';
-import { MemoryDatabase } from './memory.js';
+import { MemoryDatabase } from '../../packages/persistence/src/memory.js';
 
 type TaskStatus = 'open' | 'in-progress' | 'blocked' | 'completed';
 const actor = (id:string, roles:Actor['roles'], branchIds=['main']):Actor => ({id,organizationId:'clinic',name:id,email:`${id}@example.test`,roles,branchIds,patientIds:[]});

@@ -26,22 +26,31 @@ const writeRoles:Partial<Record<Collection,Role[]>>={
 export function requireRole(actor:Actor,roles:Role[]):void { assert(hasRole(actor,...roles),'FORBIDDEN','Your role cannot perform this action',403); }
 export function requireWrite(collection:Collection,actor:Actor):void { requireRole(actor,writeRoles[collection]||[]); }
 export function branchAllowed(entity:Entity|Record<string,unknown>,actor:Actor):boolean { return !entity.branchId || hasRole(actor,...adminRoles) || actor.branchIds.includes(String(entity.branchId)); }
+/** Whether any of the actor's roles may read the collection at all. */
+export function canRead(collection:Collection,actor:Actor):boolean { return hasRole(actor,...readRoles[collection]); }
+/** A record is visible through a staff role that may itself read the collection (with branch and ownership rules), or
+ * through the linked-patient rules. Mixed staff+patient accounts never combine patient membership with the staff path. */
 export function baseVisible(collection:Collection,entity:Entity,actor:Actor):boolean {
- if(entity.organizationId!==actor.organizationId || !hasRole(actor,...readRoles[collection])) return false;
- const patientOnly=!hasRole(actor,...staffRoles) && hasRole(actor,'patient');
- if(patientOnly){
-  if(collection==='patients')return actor.patientIds.includes(entity.id);
-  if(collection==='appointments'||collection==='consents')return actor.patientIds.includes(String(entity.patientId));
-  if(collection==='availability'||collection==='services')return entity.public===true;
-  if(collection==='conversations')return Array.isArray(entity.participantIds)&&entity.participantIds.includes(actor.id);
-  if(collection==='messages')return true; // conversation membership checked by service
-  if(collection==='notifications')return entity.userId===actor.id;
-  if(collection==='documents')return actor.patientIds.includes(String(entity.patientId))&&entity.released===true;
-  if(['encounters','prescriptions'].includes(collection))return actor.patientIds.includes(String(entity.patientId))&&entity.status==='signed';
-  if(['results','referrals'].includes(collection))return actor.patientIds.includes(String(entity.patientId))&&entity.released===true;
-  if(['invoices','payments','refunds'].includes(collection))return actor.patientIds.includes(String(entity.patientId))&&entity.status!=='draft';
-  return false;
- }
+ if(entity.organizationId!==actor.organizationId)return false;
+ const allowed=readRoles[collection];
+ const staff=actor.roles.some(r=>r!=='patient'&&allowed.includes(r)),patient=actor.roles.includes('patient')&&allowed.includes('patient');
+ return (staff&&staffVisible(collection,entity,actor))||(patient&&patientVisible(collection,entity,actor));
+}
+function patientVisible(collection:Collection,entity:Entity,actor:Actor):boolean {
+ if(collection==='patients')return actor.patientIds.includes(entity.id);
+ if(collection==='appointments'||collection==='consents')return actor.patientIds.includes(String(entity.patientId));
+ if(collection==='availability'||collection==='services')return entity.public===true;
+ // Patient participants are only ever added for a linked patient; a removed link also removes conversation access.
+ if(collection==='conversations')return Array.isArray(entity.participantIds)&&entity.participantIds.includes(actor.id)&&actor.patientIds.includes(String(entity.patientId));
+ if(collection==='messages')return true; // conversation membership checked by service
+ if(collection==='notifications')return entity.userId===actor.id;
+ if(collection==='documents')return actor.patientIds.includes(String(entity.patientId))&&entity.released===true;
+ if(['encounters','prescriptions'].includes(collection))return actor.patientIds.includes(String(entity.patientId))&&entity.status==='signed';
+ if(['results','referrals'].includes(collection))return actor.patientIds.includes(String(entity.patientId))&&entity.released===true;
+ if(['invoices','payments','refunds'].includes(collection))return actor.patientIds.includes(String(entity.patientId))&&entity.status!=='draft';
+ return false;
+}
+function staffVisible(collection:Collection,entity:Entity,actor:Actor):boolean {
  if(!branchAllowed(entity,actor))return false;
  if(collection==='conversations')return Array.isArray(entity.participantIds)&&entity.participantIds.includes(actor.id);
  if(collection==='notifications')return entity.userId===actor.id;

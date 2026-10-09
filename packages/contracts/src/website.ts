@@ -6,7 +6,9 @@ const id=z.string().min(1).max(100).regex(/^[A-Za-z0-9_-]+$/);
 const heading=z.string().trim().max(160), text=z.string().trim().max(4000);
 const locale=z.string().max(30).refine(value=>{try{return Intl.getCanonicalLocales(value).length===1}catch{return false}},'Invalid locale');
 const timezone=z.string().max(100).refine(value=>{try{new Intl.DateTimeFormat('en',{timeZone:value});return true}catch{return false}},'Invalid timezone');
-const httpsUrl=z.string().max(2048).refine(value=>{try{const url=new URL(value);return url.protocol==='https:'&&!url.username&&!url.password&&!/[\x00-\x20\\]/.test(value)}catch{return false}},'Use an HTTPS URL');
+/** HTTPS URL without credentials, whitespace/control characters or backslashes; shared with the domain schemas. */
+export const httpsUrlSchema=z.string().max(2048).refine(value=>{try{const url=new URL(value);return url.protocol==='https:'&&!url.username&&!url.password&&!/[\x00-\x20\\]/.test(value)}catch{return false}},'Use an HTTPS URL');
+const httpsUrl=httpsUrlSchema;
 export const websiteLinkSchema=z.string().min(1).max(2048).refine(value=>{
  if(/[\x00-\x20\\]/.test(value))return false;
  if(value.startsWith('/')&&!value.startsWith('//')){try{const decoded=decodeURIComponent(value);return !/[\x00-\x20\\]/.test(decoded)&&!decoded.startsWith('//')&&!decoded.split(/[/?#]/).some(part=>part==='.'||part==='..')}catch{return false}}
@@ -44,6 +46,9 @@ const date=z.string().regex(/^\d{4}-\d{2}-\d{2}$/).refine(value=>Number.isFinite
 const opening={closed:z.boolean(),opens:time.optional(),closes:time.optional()};
 function validOpening(value:{closed:boolean;opens?:string;closes?:string}){return value.closed?value.opens===undefined&&value.closes===undefined:!!value.opens&&!!value.closes&&value.opens<value.closes;}
 export const RESERVED_LOCATION_ROUTES=['home','api','_next','workspace','portal','login','register','setup','accept-invite','verify-email','reset-password','booking','tools','services','doctors','contact','locations','sitemaps'] as const;
+/** First path segments owned by the web application; CMS page slugs cannot start with them. */
+export const RESERVED_PAGE_ROUTES=['api','booking','login','register','setup','portal','workspace','tools','accept-invite','verify-email','reset-password','sitemaps','sitemap.xml','robots.txt','opengraph-image','socket.io','_next','fonts'] as const;
+export function validPageSlug(slug:string):boolean{const first=slug.split('/')[0];return !(RESERVED_PAGE_ROUTES as readonly string[]).includes(first);}
 export function validLocationSlug(slug:string):boolean{return !RESERVED_LOCATION_ROUTES.some(route=>slug===route||(route!=='locations'&&slug.startsWith(`${route}/`)));}
 export const websiteLocationSchema=z.object({
  id,branchId:id,name:z.string().trim().min(1).max(160),slug:z.string().regex(/^[a-z0-9]+(?:[-/][a-z0-9]+)*$/).max(200).refine(validLocationSlug,'Location URL conflicts with an application route'),primary:z.boolean().default(false),
