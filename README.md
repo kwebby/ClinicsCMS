@@ -24,6 +24,31 @@ Use Node.js 24 LTS. Before starting, configure the generated private `.env` with
 
 For Linux hosting, follow the [installation guide](docs/INSTALLATION.md) for Docker Compose, HTTPS, database initialization, scanning, isolated workers and first-owner setup. The repository does not include credentials or a populated clinic database.
 
+## Screenshots
+
+Captured from a local installation seeded with the fictional demonstration data (`DEMO_SEED=true pnpm seed:demo`). All names, contact details and fees are fictional.
+
+<table>
+  <tr>
+    <td width="50%"><img src="docs/screenshots/public-home.png" alt="Public clinic homepage with services, doctors and visit planning"><br><sub>Public clinic website</sub></td>
+    <td width="50%"><img src="docs/screenshots/workspace-dashboard.png" alt="Staff workspace overview with today's appointments, inquiries and tasks"><br><sub>Staff workspace overview</sub><br><br><img src="docs/screenshots/workspace-appointments-calendar.png" alt="Appointments month calendar"><br><sub>Appointments calendar</sub><br><br><img src="docs/screenshots/patient-portal.png" alt="Patient portal with upcoming visit"><br><sub>Patient portal</sub></td>
+  </tr>
+  <tr>
+    <td><img src="docs/screenshots/workspace-patients.png" alt="Patient list"><br><sub>Patients</sub></td>
+    <td><img src="docs/screenshots/workspace-invoices.png" alt="Invoice list with an issued invoice"><br><sub>Invoices</sub></td>
+  </tr>
+  <tr>
+    <td><img src="docs/screenshots/workspace-tasks-kanban.png" alt="Care task Kanban board"><br><sub>Care tasks Kanban board</sub></td>
+    <td><img src="docs/screenshots/workspace-website-settings.png" alt="Website settings with homepage, branding, location and SEO tabs"><br><sub>Website settings</sub></td>
+  </tr>
+  <tr>
+    <td><img src="docs/screenshots/public-booking.png" alt="Public appointment request form"><br><sub>Appointment request</sub></td>
+    <td><img src="docs/screenshots/sign-in.png" alt="Sign-in page"><br><sub>Sign in</sub></td>
+  </tr>
+</table>
+
+<p align="center"><img src="docs/screenshots/public-home-mobile.png" width="260" alt="Public homepage on a phone"><br><sub>Public website on a phone</sub></p>
+
 ## Documentation
 
 | Guide | What it covers |
