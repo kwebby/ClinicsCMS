@@ -2,11 +2,11 @@
 import { z } from 'zod';
 import { createHmac,createHash,randomUUID } from 'node:crypto';
 import Stripe from 'stripe';
-import nodemailer from 'nodemailer';
+import nodemailer,{ type Transporter } from 'nodemailer';
 import { Decimal } from 'decimal.js';
 import type { Actor,Database,Entity,Repository } from '../../../packages/contracts/src/index.js';
 import { assert,DomainError } from '../../../packages/contracts/src/index.js';
-import { Secrets,equal,publicOrigin } from './security.js';
+import { Secrets,equal,publicOrigin,organizationId } from './security.js';
 import { entity } from './auth.js';
 
 const secretFields=['password','secretKey','webhookSecret','keySecret','apiKey'];
@@ -17,24 +17,58 @@ const configSchemas={
  ai:z.object({apiKey:z.string().max(1000).optional(),baseUrl:z.url().default('https://api.openai.com/v1'),model:z.string().min(1).max(100),transcriptionModel:z.string().max(100).optional(),allowedClinicalData:z.boolean().default(false),monthlyTokenLimit:z.number().int().positive().max(100000000).default(100000)}).strict()
 };
 export type IntegrationName=keyof typeof configSchemas;
+/** A stored secret stays valid only while the fields that decide where (and as whom) it is sent are unchanged. */
+const secretBindings:Partial<Record<IntegrationName,Record<string,string[]>>>={smtp:{password:['host','port','user']},ai:{apiKey:['baseUrl']},razorpay:{keySecret:['keyId']}};
+export type MailOutcome='failed-before-send'|'smtp-rejected'|'acceptance-unknown';
+/** Mail that may be retried: the server never received the message data, or definitively refused it. */
+export const RETRIABLE_MAIL=['failed-before-send','smtp-rejected'];
+/** Outcome of a failed SMTP send. Before the server's go-ahead for DATA no message bytes are sent, so it cannot have been accepted. */
+export function smtpFailureOutcome(error:unknown,dataStarted:boolean):MailOutcome{
+ if(!dataStarted)return 'failed-before-send';
+ const e=error as {code?:string;responseCode?:number};
+ return e?.code==='EMESSAGE'&&typeof e.responseCode==='number'&&e.responseCode>=400&&e.responseCode<600?'smtp-rejected':'acceptance-unknown';
+}
+export class MailDeliveryError extends DomainError {
+ constructor(readonly outcome:MailOutcome,readonly smtpCode?:string){super('SMTP_SEND_FAILED',outcome==='acceptance-unknown'?'The mail server connection failed after the message was sent; delivery is unknown.':'The mail server did not accept the message.',502);this.name='MailDeliveryError';}
+}
+type MailTransportFactory=(options:Record<string,any>)=>Pick<Transporter,'sendMail'|'close'>;
 export class IntegrationService {
- constructor(private db:Database,private secrets:Secrets){}
+ constructor(private db:Database,private secrets:Secrets,private transportFactory:MailTransportFactory=options=>nodemailer.createTransport(options)){}
  private admin(a:Actor){assert(a.roles.some(r=>['owner','admin'].includes(r)),'FORBIDDEN','Administrator access required',403);}
  async config(name:IntegrationName,org:string):Promise<Record<string,any>|null>{const row=await this.db.get('integrations',`${org}-${name}`);if(!row)return null;const config={...(row.config as Record<string,any>)};for(const k of secretFields)if(config[k])config[k]=this.secrets.decrypt(config[k]);return config;}
  async get(name:string,actor:Actor){this.admin(actor);assert(name in configSchemas,'INTEGRATION','Unknown integration',404);const config=await this.config(name as IntegrationName,actor.organizationId);if(!config)return {name,configured:false};for(const k of secretFields)if(config[k]){config[`${k}Configured`]=true;delete config[k];}return {name,configured:true,...config};}
  async list(actor:Actor){return Promise.all(Object.keys(configSchemas).map(name=>this.get(name,actor)));}
  async save(name:string,input:unknown,actor:Actor){this.admin(actor);assert(name in configSchemas,'INTEGRATION','Unknown integration',404);const data=configSchemas[name as IntegrationName].parse(input) as Record<string,any>;
   if(name==='ai'){const u=new URL(data.baseUrl);assert(u.protocol==='https:'&&!u.username&&!u.password,'AI_URL','Cloud AI endpoints require HTTPS without URL credentials');assert((process.env.AI_ALLOWED_HOSTS??'api.openai.com').split(',').includes(u.hostname),'AI_HOST','The operator must allow this AI host in AI_ALLOWED_HOSTS',400);}
-  const id=`${actor.organizationId}-${name}`;await this.db.transaction([`integration:${id}`],async tx=>{const previous=await tx.get('integrations',id);const config={...((previous?.config as object)??{}),...data};for(const field of secretFields){if(data[field])config[field]=this.secrets.encrypt(data[field]);else if(previous?.config&&(previous.config as any)[field])config[field]=(previous.config as any)[field];}await tx.put('integrations',{...(previous??entity(actor.organizationId,id)),name,config,version:previous?previous.version+1:1,updatedAt:new Date().toISOString()},previous?.version);await tx.put('audit',{...entity(actor.organizationId),actorId:actor.id,action:'integration.configure',targetId:name});});return this.get(name,actor);
+  const id=`${actor.organizationId}-${name}`;await this.db.transaction([`integration:${id}`],async tx=>{const previous=await tx.get('integrations',id);const old=(previous?.config??{}) as Record<string,any>;const config:Record<string,any>={...old,...data};const cleared:string[]=[];
+   for(const field of secretFields){if(data[field])config[field]=this.secrets.encrypt(data[field]);else if(old[field]){
+    // Never send a stored secret to a new host or account: without a new secret, the old one is cleared.
+    if((secretBindings[name as IntegrationName]?.[field]??[]).some(key=>String(old[key]??'')!==String(config[key]??''))){delete config[field];cleared.push(field);}else config[field]=old[field];}}
+   await tx.put('integrations',{...(previous??entity(actor.organizationId,id)),name,config,version:previous?previous.version+1:1,updatedAt:new Date().toISOString()},previous?.version);await tx.put('audit',{...entity(actor.organizationId),actorId:actor.id,action:'integration.configure',targetId:name,...(cleared.length?{clearedSecrets:cleared}:{})});});return this.get(name,actor);
  }
  async testMail(input:unknown,actor:Actor){this.admin(actor);const {to}=z.object({to:z.email()}).strict().parse(input);const smtp=await this.config('smtp',actor.organizationId);assert(smtp,'SMTP_UNCONFIGURED','Configure SMTP before testing',503);const result=await this.sendMail(actor.organizationId,to,'ClinicsCMS email configuration test','Your clinic email configuration was accepted by the mail server.','test-'+randomUUID());return {accepted:result.accepted,deliveryConfirmed:false};}
- async sendMail(org:string,to:string,subject:string,text:string,id:string){const smtp=await this.config('smtp',org);assert(smtp,'SMTP_UNCONFIGURED','SMTP is not configured',503);const transport=nodemailer.createTransport({host:smtp.host,port:smtp.port,secure:smtp.secure,requireTLS:true,auth:smtp.user?{user:smtp.user,pass:smtp.password}:undefined,connectionTimeout:10000,greetingTimeout:10000,socketTimeout:20000,tls:{rejectUnauthorized:true}});try{const result=await transport.sendMail({from:smtp.from,replyTo:smtp.replyTo,to,subject,text,messageId:`<${id}@${new URL(publicOrigin()).hostname}>`});return {accepted:result.accepted.length>0,messageId:result.messageId};}finally{transport.close();}}
+ async sendMail(org:string,to:string,subject:string,text:string,id:string){
+  const smtp=await this.config('smtp',org);if(!smtp)throw new MailDeliveryError('failed-before-send','SMTP_UNCONFIGURED');
+  // The protocol transcript is observed only to learn whether the server accepted DATA; nothing from it is stored or logged.
+  let dataCommand=false,dataStarted=false;const watch=(entry:{tnx?:string}|undefined,message:unknown)=>{const line=String(message??'');if(entry?.tnx==='client')dataCommand=/^DATA\s*$/i.test(line);else if(entry?.tnx==='server'&&dataCommand){dataStarted=/^[23]/.test(line);dataCommand=false;}};
+  const logger={trace:watch,debug:watch,info:watch,warn:watch,error:watch,fatal:watch};
+  const transport=this.transportFactory({host:smtp.host,port:smtp.port,secure:smtp.secure,requireTLS:true,auth:smtp.user?{user:smtp.user,pass:smtp.password}:undefined,connectionTimeout:10000,greetingTimeout:10000,socketTimeout:20000,tls:{rejectUnauthorized:true},logger,transactionLog:true});
+  try{const result=await transport.sendMail({from:smtp.from,replyTo:smtp.replyTo,to,subject,text,messageId:`<${id}@${new URL(publicOrigin()).hostname}>`});return {accepted:Array.isArray(result.accepted)&&result.accepted.length>0,messageId:result.messageId};}
+  catch(error){const code=(error as {code?:unknown})?.code;throw new MailDeliveryError(smtpFailureOutcome(error,dataStarted),typeof code==='string'&&/^[A-Z0-9_]{1,40}$/.test(code)?code:undefined);}
+  finally{transport.close();}
+ }
 }
 
 type PaymentRow=Entity & Record<string,any>;
 type PaymentProvider='stripe'|'razorpay';
 type PaymentDependencies={stripeFactory?:(key:string)=>Stripe;fetch?:typeof fetch};
 const paymentHash=(value:unknown)=>createHash('sha256').update(JSON.stringify(value)).digest('hex');
+/** Provider events can arrive late, replayed or out of order, so statuses only move forward (a recorded success outranks a failure). */
+const attemptRank:Record<string,number>={creating:0,ready:0,'needs-reconciliation':0,'awaiting-payment':1,expired:2,failed:2,settled:3};
+const refundRank:Record<string,number>={creating:0,'needs-reconciliation':0,pending:1,failed:2,canceled:2,succeeded:3};
+export const advances=(ranks:Record<string,number>,current:unknown,next:string)=>(ranks[next]??0)>(ranks[String(current)]??0);
+/** Razorpay's event-id header is not covered by the signature, so deduplication uses only signed body fields. */
+export function razorpayEventId(event:any,raw:Buffer):string{const entity=event?.payload?.refund?.entity??event?.payload?.payment?.entity??event?.payload?.order?.entity;return typeof entity?.id==='string'?`razorpay:${paymentHash([event.event,entity.id,entity.status??null,event.created_at??entity.created_at??null])}`:`razorpay-body:${createHash('sha256').update(raw).digest('hex')}`;}
 const precision=(currency:string)=>new Intl.NumberFormat('en',{style:'currency',currency}).resolvedOptions().maximumFractionDigits??2;
 const decimalAmount=z.string().regex(/^\d{1,12}(?:\.\d{1,6})?$/);
 /** Provider minor-unit rules are deliberately separate from document currency formatting. */
@@ -98,7 +132,7 @@ export class PaymentService {
   return attempt.status==='settled'?{provider,attemptId:attempt.id,status:'settled'}:attempt.publicResponse;
  }
  private async settle(provider:PaymentProvider,attemptId:string,object:any,eventKey:string,eventType:string):Promise<Record<string,unknown>>{
-  const org=process.env.ORGANIZATION_ID??'clinic';const initial=await this.db.get<PaymentRow>('paymentAttempts',attemptId);assert(initial&&initial.organizationId===org&&initial.provider===provider,'ATTEMPT','Unknown payment attempt',409);
+  const org=organizationId();const initial=await this.db.get<PaymentRow>('paymentAttempts',attemptId);assert(initial&&initial.organizationId===org&&initial.provider===provider,'ATTEMPT','Unknown payment attempt',409);
   return this.db.transaction([`${org}:invoice:${initial.invoiceId}`,`checkout:${attemptId}`,`webhook:${eventKey}`],async tx=>{
    const seen=await tx.get('webhookEvents',eventKey);if(seen)return {received:true,duplicate:true};const attempt=await tx.get<PaymentRow>('paymentAttempts',attemptId);assert(attempt&&attempt.organizationId===org&&attempt.provider===provider,'ATTEMPT','Unknown payment attempt',409);
    const invoice=await tx.get<PaymentRow>('invoices',String(attempt.invoiceId));assert(invoice&&invoice.organizationId===org&&invoice.status!=='draft','INVOICE','Issued invoice is missing',409);
@@ -117,11 +151,11 @@ export class PaymentService {
    await tx.put('webhookEvents',{...entity(org,eventKey),provider,eventType,processedAt:new Date().toISOString()});return {received:true,paymentId};
   });
  }
- async webhook(providerValue:string,raw:Buffer,signature:string,eventHeader?:string){
-  const provider=this.provider(providerValue);const org=process.env.ORGANIZATION_ID??'clinic';const config=await this.integrations.config(provider,org);assert(config?.webhookSecret,'PROVIDER_UNCONFIGURED','Webhook integration is unavailable',503);let event:any;
+ async webhook(providerValue:string,raw:Buffer,signature:string,_unsignedEventId?:string){
+  const provider=this.provider(providerValue);const org=organizationId();const config=await this.integrations.config(provider,org);assert(config?.webhookSecret,'PROVIDER_UNCONFIGURED','Webhook integration is unavailable',503);let event:any;
   if(provider==='stripe'){try{event=new Stripe(config.secretKey).webhooks.constructEvent(raw,signature,config.webhookSecret);}catch{throw new DomainError('SIGNATURE','Invalid webhook signature',400);}}
   else{const expected=createHmac('sha256',config.webhookSecret).update(raw).digest('hex');assert(equal(expected,signature),'SIGNATURE','Invalid webhook signature',400);try{event=JSON.parse(raw.toString('utf8'));}catch{throw new DomainError('EVENT','Invalid event body');}}
-  const type=String(provider==='stripe'?event.type:event.event);const eventId=provider==='stripe'?event.id:eventHeader??`${event.event}:${event.payload?.payment?.entity?.id??event.payload?.refund?.entity?.id??paymentHash(raw.toString())}`;assert(typeof eventId==='string'&&eventId.length>3&&eventId.length<500,'EVENT','Missing event identifier');const eventKey=`event-${paymentHash([provider,eventId])}`;
+  const type=String(provider==='stripe'?event.type:event.event);const eventId=provider==='stripe'?event.id:razorpayEventId(event,raw);assert(typeof eventId==='string'&&eventId.length>3&&eventId.length<500,'EVENT','Missing event identifier');const eventKey=`event-${paymentHash([provider,eventId])}`;
   if(provider==='stripe'&&['refund.created','refund.updated','refund.failed'].includes(type)||provider==='razorpay'&&['refund.created','refund.processed','refund.failed'].includes(type))return this.refundEvent(provider,provider==='stripe'?event.data?.object:event.payload?.refund?.entity,eventKey,type);
   const object=provider==='stripe'?event.data?.object:event.payload?.payment?.entity;
   const paid=provider==='stripe'?['checkout.session.completed','checkout.session.async_payment_succeeded'].includes(type)&&object?.payment_status==='paid':type==='payment.captured'&&object?.status==='captured';
@@ -134,7 +168,7 @@ export class PaymentService {
    if(attemptId){const attempt=await tx.get<PaymentRow>('paymentAttempts',String(attemptId));if(attempt&&attempt.organizationId===org&&attempt.provider===provider&&attempt.status!=='settled'){
     // A Razorpay order can have several failed payment attempts and remain payable.
     const status=failure?(provider==='razorpay'?'ready':type==='checkout.session.expired'?'expired':'failed'):'awaiting-payment';
-    if(failure||type==='checkout.session.completed')await this.update(tx,'paymentAttempts',attempt,{status,lastProviderEvent:type});
+    if((failure||type==='checkout.session.completed')&&advances(attemptRank,attempt.status,status))await this.update(tx,'paymentAttempts',attempt,{status,lastProviderEvent:type});
    }}
    await tx.put('webhookEvents',{...entity(org,eventKey),provider,eventType:type,processedAt:new Date().toISOString()});return {received:true};
   });
@@ -172,7 +206,7 @@ export class PaymentService {
   this.finance(actor);const provider=this.provider(providerValue);const data=z.object({requestId:z.string().min(1).max(100),providerRefundId:z.string().regex(/^[A-Za-z0-9_]+$/).max(200).optional()}).strict().parse(input);const request=await this.db.get<PaymentRow>('refundRequests',data.requestId);assert(request&&request.organizationId===actor.organizationId&&request.provider===provider,'REFUND','Refund request not found',404);await this.invoice(String(request.invoiceId),actor,this.db,true);const reference=String(request.providerRefundId??data.providerRefundId??'');assert(reference,'PROVIDER_REFERENCE_REQUIRED','Provide the existing provider refund reference to reconcile its outcome',409);const config=await this.config(provider,actor.organizationId);const refund=provider==='stripe'?await this.stripeFactory(config.secretKey).refunds.retrieve(reference):await this.razor(config,`refunds/${reference}`);const requestId=provider==='stripe'?refund.metadata?.requestId:refund.notes?.requestId;assert(requestId===request.id,'REFUND_EVENT','Provider refund belongs to another request',409);return this.refundEvent(provider,refund,`refund-reconcile-${paymentHash([provider,refund.id,refund.status])}`,'refund.reconciliation');
  }
  private async refundEvent(provider:PaymentProvider,object:any,eventKey:string,eventType:string):Promise<Record<string,unknown>>{
-  const org=process.env.ORGANIZATION_ID??'clinic';assert(object&&typeof object.id==='string','REFUND_EVENT','Invalid refund event');const requestId=provider==='stripe'?object.metadata?.requestId:object.notes?.requestId;
+  const org=organizationId();assert(object&&typeof object.id==='string','REFUND_EVENT','Invalid refund event');const requestId=provider==='stripe'?object.metadata?.requestId:object.notes?.requestId;
   const paymentReference=String(provider==='stripe'?(typeof object.payment_intent==='string'?object.payment_intent:object.payment_intent?.id):object.payment_id);let request=requestId?await this.db.get<PaymentRow>('refundRequests',String(requestId)):null;
   const matches=await this.db.list<PaymentRow>('payments',{eq:{organizationId:org,method:provider,providerReference:paymentReference},limit:2});const initial=matches[0];
   // Merchant-dashboard refunds also reconcile, provided their verified payment is recorded locally.
@@ -191,7 +225,7 @@ export class PaymentService {
     await this.update(tx,'payments',payment,{refundedAmount:refunded.toFixed(precision(currency)),allocatedRefundedAmount:new Decimal(String(payment.allocatedRefundedAmount??'0')).plus(allocatedRefund).toFixed(precision(currency)),unallocatedAmount:unallocated.minus(fromUnallocated).toFixed(precision(currency)),status:refunded.eq(String(payment.amount))?'refunded':'partially-refunded'});
     const balance=new Decimal(String(invoice.balance)).plus(allocatedRefund);await this.update(tx,'invoices',invoice,{paidAmount:paid.toFixed(precision(currency)),balance:balance.toFixed(precision(currency)),status:balance.isZero()?(new Decimal(String(invoice.creditedAmount??'0')).gt(0)?'credited':'paid'):paid.isZero()?'issued':'partially-paid'});await this.event(tx,org,'payment.refunded',{paymentId:payment.id,refundId,invoiceId:invoice.id});
    }
-   if(request&&request.status!=='succeeded')await this.update(tx,'refundRequests',request,{status,providerRefundId:object.id});await tx.put('webhookEvents',{...entity(org,eventKey),provider,eventType,processedAt:new Date().toISOString()});return {received:true,status};
+   if(request&&(advances(refundRank,request.status,status)||(!request.providerRefundId&&request.status===status)))await this.update(tx,'refundRequests',request,{status,providerRefundId:object.id});await tx.put('webhookEvents',{...entity(org,eventKey),provider,eventType,processedAt:new Date().toISOString()});return {received:true,status};
   });
  }
 }

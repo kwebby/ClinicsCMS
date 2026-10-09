@@ -31,7 +31,7 @@ export async function createApp(){
  app.use((req:Request,res:Response,next:NextFunction)=>{res.setHeader('X-Request-ID',randomUUID());res.setHeader('Cache-Control','private, no-store, max-age=0');res.setHeader('X-Robots-Tag','noindex, nofollow');next();});
  app.enableCors({origin:(origin:string|undefined,cb:(err:Error|null,allowed:boolean)=>void)=>cb(null,!!origin&&allowedOrigins().has(origin)),credentials:true,allowedHeaders:['Content-Type','X-CSRF-Token'],methods:['GET','POST','PATCH','PUT','OPTIONS']});
  const runtime=app.get(Runtime);
- app.use((req:Request,res:Response,next:NextFunction)=>{runtime.limiter.take(`request:${req.ip}`,300,60).then(()=>next()).catch(()=>res.status(429).json({error:{code:'RATE_LIMIT',message:'Too many requests. Try again shortly.'}}));});
+ app.use((req:Request,res:Response,next:NextFunction)=>{runtime.limiter.take(`request:${req.ip}`,300,60).then(()=>next()).catch((error:unknown)=>{const limited=error instanceof DomainError&&error.status===429;res.status(limited?429:503).json(limited?{error:{code:'RATE_LIMIT',message:'Too many requests. Try again shortly.'}}:{error:{code:'UNAVAILABLE',message:'The service is temporarily unavailable. Try again shortly.'}});});});
  app.useGlobalFilters(new ApiErrors());app.enableShutdownHooks();
  const spec=enrichOpenApi(SwaggerModule.createDocument(app,new DocumentBuilder().setTitle('ClinicsCMS API').setDescription('Versioned clinic operations. Opaque cookie session and X-CSRF-Token required for authenticated mutations. See docs/API-CONTRACT.md and docs/DOMAIN-API.md for strict schemas.').setVersion('1.0').addCookieAuth('clinic-session').build()));
  if(process.env.OPENAPI_ENABLED==='true')SwaggerModule.setup('api/docs',app,spec);
