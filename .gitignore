@@ -19,15 +19,6 @@ deploy/certificates/
 deploy/secrets/
 # Generated evidence can contain machine paths, test access details or exported records.
 artifacts/*
-!artifacts/research/
-artifacts/research/*
-!artifacts/research/clinic-sites-2026-10/
-artifacts/research/clinic-sites-2026-10/*
-!artifacts/research/clinic-sites-2026-10/README.md
-!artifacts/research/clinic-sites-2026-10/clinic-sites.csv
-!artifacts/research/clinic-sites-2026-10/clinic-sites.json
-!artifacts/research/clinic-sites-2026-10/homepage-section-frequency.csv
-!artifacts/research/clinic-sites-2026-10/page-type-frequency.csv
 
 # Generated container security inventories
 application-sbom.json

@@ -47,4 +47,4 @@ The patient portal has separate appointments, documents, invoices, results, conv
 
 Theme creation, ZIP upload, customization, and preview also use separate pages. Public BlockNote image uploads take an accessible description inline before the file is uploaded and scanned.
 
-**Website settings** opens dedicated pages for homepage sections, colors/fonts, header/footer, locations/NAP, SEO/social defaults and preview. Section and location editing have their own URLs. Save a website draft, review it, then activate a theme to publish an immutable snapshot. See the [website settings guide](WEBSITE-SETTINGS.md) and [24-clinic research](../artifacts/research/clinic-sites-2026-10/README.md).
+**Website settings** opens dedicated pages for homepage sections, colors/fonts, header/footer, locations/NAP, SEO/social defaults and preview. Section and location editing have their own URLs. Save a website draft, review it, then activate a theme to publish an immutable snapshot. See the [website settings guide](WEBSITE-SETTINGS.md) and [24-clinic research](research/clinic-websites-2026-10/README.md).
